@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { getEmpresaIdFromRequest, getEmpresaSlugFromRequest } from '@/lib/empresaApi';
+import { getEmpresaIdFromRequest, getEmpresaSlugFromRequest, EMPRESA_TO_PRODUCT_ID } from '@/lib/empresaApi';
 import { convertToMxn } from '@/lib/currency';
 
 /** Formato fecha para el front (yyyy-MM-dd) */
@@ -21,6 +21,7 @@ export async function GET(req: Request) {
     const empresaId = getEmpresaIdFromRequest(req);
     const empresaSlug = getEmpresaSlugFromRequest(req);
     const isEuromex = empresaSlug === 'euromex';
+    const productIdForEmpresa = empresaSlug ? EMPRESA_TO_PRODUCT_ID[empresaSlug] : null;
 
     const qCobros = supabase.from('cobros').select('id_venta, id_producto, canal_cobro, fecha_pago, metodo_pago, monto_pagado, evidencia, notas');
     const qPedidos = supabase.from('pedidos').select('id_pedido, id_venta, id_compra, id_producto, id_cliente, fecha_pedido, canal_venta, total_pedido, estado_pedido');
@@ -33,8 +34,16 @@ export async function GET(req: Request) {
     const cobrosQ = empresaId ? (isEuromex ? qCobros.or(`empresa_id.eq.${empresaId},empresa_id.is.null`) : qCobros.eq('empresa_id', empresaId)) : qCobros;
     const pedidosQ = empresaId ? (isEuromex ? qPedidos.or(`empresa_id.eq.${empresaId},empresa_id.is.null`) : qPedidos.eq('empresa_id', empresaId)) : qPedidos;
     const enviosQ = empresaId ? (isEuromex ? qEnvios.or(`empresa_id.eq.${empresaId},empresa_id.is.null`) : qEnvios.eq('empresa_id', empresaId)) : qEnvios;
-    const comprasQ = empresaId ? (isEuromex ? qCompras.or(`empresa_id.eq.${empresaId},empresa_id.is.null`) : qCompras.eq('empresa_id', empresaId)) : qCompras;
-    const pagosQ = empresaId ? (isEuromex ? qPagos.or(`empresa_id.eq.${empresaId},empresa_id.is.null`) : qPagos.eq('empresa_id', empresaId)) : qPagos;
+    const comprasQ = empresaId
+      ? (isEuromex
+        ? qCompras.or(`empresa_id.eq.${empresaId},empresa_id.is.null`)
+        : productIdForEmpresa
+          ? qCompras.or(`empresa_id.eq.${empresaId},and(empresa_id.is.null,id_producto.eq.${productIdForEmpresa})`)
+          : qCompras.eq('empresa_id', empresaId))
+      : qCompras;
+    const pagosQ = empresaId
+      ? (isEuromex ? qPagos.or(`empresa_id.eq.${empresaId},empresa_id.is.null`) : productIdForEmpresa ? qPagos.or(`empresa_id.eq.${empresaId},empresa_id.is.null`) : qPagos.eq('empresa_id', empresaId))
+      : qPagos;
     const gastosQ = empresaId ? (isEuromex ? qGastos.or(`empresa_id.eq.${empresaId},empresa_id.is.null`) : qGastos.eq('empresa_id', empresaId)) : qGastos;
     const productosQ = empresaId ? (isEuromex ? qProductos.or(`empresa_id.eq.${empresaId},empresa_id.is.null`) : qProductos.eq('empresa_id', empresaId)) : qProductos;
 

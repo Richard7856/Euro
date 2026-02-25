@@ -63,6 +63,7 @@ type DatosApi = {
 
 export default function FinancieroPage() {
   const empresaContext = useEmpresaOptional();
+  const empresa = empresaContext?.empresa ?? 'euromex';
 
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<string>('');
@@ -169,7 +170,7 @@ export default function FinancieroPage() {
         }
       });
     return () => { cancelled = true; };
-  }, [updateTimestamp]);
+  }, [updateTimestamp, empresa]);
 
   const handleRefresh = useCallback(() => {
     setLoading(true);

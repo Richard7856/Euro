@@ -6,6 +6,7 @@ import { ArrowLeftIcon, ShoppingCartIcon, PlusIcon, PencilIcon, TrashIcon, Truck
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useCurrency } from '@/lib/currencyContext';
+import { useEmpresaOptional } from '@/lib/empresaContext';
 
 type Envio = {
   id_envio: string;
@@ -42,6 +43,7 @@ type Compra = {
 
 export default function ComprasPage() {
   const { formatCurrency } = useCurrency();
+  const empresa = useEmpresaOptional()?.empresa ?? 'euromex';
   const [compras, setCompras] = useState<Compra[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,14 +72,14 @@ export default function ComprasPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { fetchCompras(); }, [fetchCompras]);
+  useEffect(() => { fetchCompras(); }, [fetchCompras, empresa]);
 
   useEffect(() => {
     fetch('/api/datos', { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => setEnvios(d.envios ?? []))
       .catch(() => setEnvios([]));
-  }, []);
+  }, [empresa]);
 
   const openNew = () => {
     setEditing(null);

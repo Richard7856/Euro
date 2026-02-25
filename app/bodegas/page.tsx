@@ -15,6 +15,7 @@ import { es } from 'date-fns/locale';
 import type { Bodega } from '@/types/financial';
 import { useCurrency } from '@/lib/currencyContext';
 import ExportButtons from '@/components/ExportButtons';
+import { useEmpresaOptional } from '@/lib/empresaContext';
 
 type InventarioBodegaRow = {
   id: string;
@@ -44,6 +45,7 @@ type ProductoOption = { id_producto: string; nombre_producto: string };
 
 export default function BodegasPage() {
   const { formatCurrency } = useCurrency();
+  const empresa = useEmpresaOptional()?.empresa ?? 'euromex';
   const [bodegas, setBodegas] = useState<Bodega[]>([]);
   const [productos, setProductos] = useState<ProductoOption[]>([]);
   const [inventario, setInventario] = useState<InventarioBodegaRow[]>([]);
@@ -116,7 +118,7 @@ export default function BodegasPage() {
   useEffect(() => {
     fetchBodegas();
     fetchProductos();
-  }, [fetchBodegas, fetchProductos]);
+  }, [fetchBodegas, fetchProductos, empresa]);
 
   useEffect(() => {
     if (bodegaSeleccionada) {

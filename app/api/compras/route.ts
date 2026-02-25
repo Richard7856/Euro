@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { getEmpresaIdFromRequest } from '@/lib/empresaApi';
+import { getEmpresaIdFromRequest, getEmpresaSlugFromRequest, EMPRESA_TO_PRODUCT_ID } from '@/lib/empresaApi';
 
 export async function GET(req: Request) {
   try {
@@ -9,15 +9,32 @@ export async function GET(req: Request) {
     if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     const empresaId = getEmpresaIdFromRequest(req);
+    const empresaSlug = getEmpresaSlugFromRequest(req);
+    const productIdForEmpresa = empresaSlug ? EMPRESA_TO_PRODUCT_ID[empresaSlug] : null;
+
     let comprasQuery = supabase.from('compras').select('*');
-    if (empresaId) comprasQuery = comprasQuery.eq('empresa_id', empresaId);
+    if (empresaId && productIdForEmpresa) {
+      // Incluir compras con empresa_id = X O (empresa_id nulo y id_producto = CGR/CRQ) para que se vean Cigarros/Garritas
+      comprasQuery = comprasQuery.or(`empresa_id.eq.${empresaId},and(empresa_id.is.null,id_producto.eq.${productIdForEmpresa})`);
+    } else if (empresaId) {
+      comprasQuery = comprasQuery.eq('empresa_id', empresaId);
+    }
     const { data: compras, error } = await comprasQuery.order('fecha_compra', { ascending: false }).limit(500);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    let pagosQuery = supabase.from('pagos_compra').select('id_compra, monto_pago');
-    if (empresaId) pagosQuery = pagosQuery.eq('empresa_id', empresaId);
-    const { data: pagos } = await pagosQuery;
+    let pagos: { id_compra: string; monto_pago: number }[] | null;
+    if (empresaId && (compras?.length ?? 0) > 0 && productIdForEmpresa) {
+      // Pagos por id_compra para no depender de empresa_id en pagos_compra
+      const ids = (compras ?? []).map((c: { id_compra?: string }) => c.id_compra).filter(Boolean) as string[];
+      const { data } = await supabase.from('pagos_compra').select('id_compra, monto_pago').in('id_compra', ids);
+      pagos = data ?? null;
+    } else {
+      let pagosQuery = supabase.from('pagos_compra').select('id_compra, monto_pago');
+      if (empresaId) pagosQuery = pagosQuery.eq('empresa_id', empresaId);
+      const { data } = await pagosQuery;
+      pagos = data ?? null;
+    }
     const pagadoPorCompra = new Map<string, number>();
     for (const p of pagos ?? []) {
       const id = (p as { id_compra: string }).id_compra;

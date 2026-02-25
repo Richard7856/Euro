@@ -5,20 +5,22 @@ import { CuentaPorCobrar } from '@/types/financial';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import AgingTable from '@/components/AgingTable';
+import { useEmpresaOptional } from '@/lib/empresaContext';
 
 export default function CobranzaPage() {
+  const empresa = useEmpresaOptional()?.empresa ?? 'euromex';
   const [filter, setFilter] = useState<'all' | 'vigente' | 'vencido'>('all');
   const [cuentasPorCobrar, setCuentasPorCobrar] = useState<CuentaPorCobrar[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/datos')
+    fetch('/api/datos', { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Error al cargar'))))
       .then((d) => setCuentasPorCobrar(d.cuentasPorCobrar ?? []))
       .catch((e) => setError(e instanceof Error ? e.message : 'Error'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [empresa]);
 
   const filteredCuentas = cuentasPorCobrar.filter((c) => {
     if (filter === 'all') return true;

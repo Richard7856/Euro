@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { CubeIcon, ArrowLeftIcon, ChartBarIcon, BuildingStorefrontIcon, FunnelIcon } from '@heroicons/react/24/outline';
 import { useCurrency } from '@/lib/currencyContext';
 import ExportButtons from '@/components/ExportButtons';
+import { useEmpresaOptional } from '@/lib/empresaContext';
 
 type Producto = {
   id_producto: string;
@@ -15,6 +16,7 @@ type Producto = {
 };
 
 export default function MercanciaPage() {
+  const empresa = useEmpresaOptional()?.empresa ?? 'euromex';
   const [inventario, setInventario] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,12 +34,12 @@ export default function MercanciaPage() {
   }, [inventario, filtroTexto]);
 
   useEffect(() => {
-    fetch('/api/datos')
+    fetch('/api/datos', { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Error al cargar'))))
       .then((d) => setInventario(d.inventario ?? []))
       .catch((e) => setError(e instanceof Error ? e.message : 'Error'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [empresa]);
 
   const totalValor = inventarioFiltrado.reduce((s, p) => s + (p.valor_total ?? 0), 0);
   const exportColumns = [

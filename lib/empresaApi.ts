@@ -26,3 +26,9 @@ export function getEmpresaIdFromRequest(req: Request): string | null {
 export function getEmpresaSlugFromRequest(req: Request): string | null {
   return getSlugFromRequest(req);
 }
+
+/** id_producto que corresponde a cada empresa (compras CGR/CRQ sin empresa_id se muestran por empresa) */
+export const EMPRESA_TO_PRODUCT_ID: Record<string, string> = {
+  cigarros: 'CGR',
+  garritas: 'CRQ',
+};

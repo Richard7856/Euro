@@ -17,6 +17,7 @@ import type { PrecioProveedor } from '@/types/financial';
 import { useCurrency } from '@/lib/currencyContext';
 import ExportButtons from '@/components/ExportButtons';
 import { USD_TO_MXN } from '@/lib/currency';
+import { useEmpresaOptional } from '@/lib/empresaContext';
 
 const FUENTES: { value: string; label: string }[] = [
   { value: 'manual', label: 'Manual' },
@@ -28,6 +29,7 @@ const FUENTES: { value: string; label: string }[] = [
 
 export default function PreciosProveedorPage() {
   const { formatCurrency } = useCurrency();
+  const empresa = useEmpresaOptional()?.empresa ?? 'euromex';
   const [precios, setPrecios] = useState<PrecioProveedor[]>([]);
   const [proveedores, setProveedores] = useState<{ id_proveedor: string; nombre_proveedor: string }[]>([]);
   const [productos, setProductos] = useState<{ id_producto: string; nombre_producto: string }[]>([]);
@@ -93,10 +95,10 @@ export default function PreciosProveedorPage() {
   useEffect(() => {
     fetchProveedores();
     fetchProductos();
-  }, [fetchProveedores, fetchProductos]);
+  }, [fetchProveedores, fetchProductos, empresa]);
   useEffect(() => {
     fetchPrecios();
-  }, [fetchPrecios]);
+  }, [fetchPrecios, empresa]);
 
   const openNew = () => {
     setEditing(null);

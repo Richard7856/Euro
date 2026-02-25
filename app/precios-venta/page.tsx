@@ -8,9 +8,11 @@ import { es } from 'date-fns/locale';
 import type { PrecioVenta } from '@/types/financial';
 import { useCurrency } from '@/lib/currencyContext';
 import ExportButtons from '@/components/ExportButtons';
+import { useEmpresaOptional } from '@/lib/empresaContext';
 
 export default function PreciosVentaPage() {
   const { formatCurrency } = useCurrency();
+  const empresa = useEmpresaOptional()?.empresa ?? 'euromex';
   const [precios, setPrecios] = useState<PrecioVenta[]>([]);
   const [productos, setProductos] = useState<{ id_producto: string; nombre_producto: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,10 +56,10 @@ export default function PreciosVentaPage() {
 
   useEffect(() => {
     fetchProductos();
-  }, [fetchProductos]);
+  }, [fetchProductos, empresa]);
   useEffect(() => {
     fetchPrecios();
-  }, [fetchPrecios]);
+  }, [fetchPrecios, empresa]);
 
   const openNew = () => {
     setEditing(null);
