@@ -8,9 +8,7 @@ import {
   CurrencyDollarIcon,
   CubeIcon,
   UserGroupIcon,
-  TruckIcon,
   CalendarDaysIcon,
-  ChartBarIcon,
   BuildingStorefrontIcon,
   BanknotesIcon,
   UserCircleIcon,
@@ -19,15 +17,15 @@ import {
   UsersIcon,
   ChevronDownIcon,
   DocumentTextIcon,
+  ArchiveBoxIcon,
+  MapPinIcon,
 } from '@heroicons/react/24/outline';
 import {
   HomeIcon as HomeIconSolid,
   CurrencyDollarIcon as CurrencyDollarIconSolid,
   CubeIcon as CubeIconSolid,
   UserGroupIcon as UserGroupIconSolid,
-  TruckIcon as TruckIconSolid,
   CalendarDaysIcon as CalendarDaysIconSolid,
-  ChartBarIcon as ChartBarIconSolid,
   BuildingStorefrontIcon as BuildingStorefrontIconSolid,
   BanknotesIcon as BanknotesIconSolid,
   UserCircleIcon as UserCircleIconSolid,
@@ -35,9 +33,12 @@ import {
   ShoppingCartIcon as ShoppingCartIconSolid,
   UsersIcon as UsersIconSolid,
   DocumentTextIcon as DocumentTextIconSolid,
+  ArchiveBoxIcon as ArchiveBoxIconSolid,
+  MapPinIcon as MapPinIconSolid,
 } from '@heroicons/react/24/solid';
 import LogoutButton from './LogoutButton';
 import CurrencyToggle from './CurrencyToggle';
+import CurrencyRateAdmin from './CurrencyRateAdmin';
 import { useProfileOptional } from '@/lib/profileContext';
 import { useEmpresaOptional } from '@/lib/empresaContext';
 import { EMPRESAS, EMPRESA_THEMES, type EmpresaSlug } from '@/lib/empresaContext';
@@ -49,12 +50,12 @@ const navItems: { href: string; label: string; moduleKey: string; Icon: typeof H
   { href: '/compras', label: 'Compras', moduleKey: 'compras', Icon: ShoppingCartIcon, IconActive: ShoppingCartIconSolid },
   { href: '/cotizador', label: 'Cotizador', moduleKey: 'cotizador', Icon: DocumentTextIcon, IconActive: DocumentTextIconSolid, euromexOnly: true },
   { href: '/mercancia', label: 'Mercancía', moduleKey: 'mercancia', Icon: CubeIcon, IconActive: CubeIconSolid },
+  { href: '/bodegas', label: 'Bodegas', moduleKey: 'bodegas', Icon: ArchiveBoxIcon, IconActive: ArchiveBoxIconSolid },
+  { href: '/contenedores', label: 'Contenedores', moduleKey: 'contenedores', Icon: MapPinIcon, IconActive: MapPinIconSolid },
   { href: '/clientes', label: 'Clientes', moduleKey: 'clientes', Icon: UserGroupIcon, IconActive: UserGroupIconSolid },
   { href: '/proveedores', label: 'Proveedores', moduleKey: 'proveedores', Icon: BuildingStorefrontIcon, IconActive: BuildingStorefrontIconSolid },
   { href: '/gastos', label: 'Gastos', moduleKey: 'gastos', Icon: BanknotesIcon, IconActive: BanknotesIconSolid },
-  { href: '/contenedores', label: 'Contenedores', moduleKey: 'contenedores', Icon: TruckIcon, IconActive: TruckIconSolid },
   { href: '/promesas', label: 'Promesas de pago', moduleKey: 'promesas', Icon: CalendarDaysIcon, IconActive: CalendarDaysIconSolid },
-  { href: '/dinamico', label: 'Datos en vivo', moduleKey: 'dinamico', Icon: ChartBarIcon, IconActive: ChartBarIconSolid },
 ];
 
 const rolLabel: Record<string, string> = {
@@ -205,6 +206,7 @@ export default function DashboardNav() {
           <span className="text-xs text-zinc-500">Moneda</span>
           <CurrencyToggle />
         </div>
+        <CurrencyRateAdmin />
         {profile && (
           <div className="rounded-lg bg-zinc-800/50 px-3 py-2 border border-zinc-700/50">
             <p className="text-zinc-300 text-sm truncate" title={profile.email ?? undefined}>

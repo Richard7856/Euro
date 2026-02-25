@@ -25,9 +25,9 @@ export async function GET(req: Request) {
     const qCobros = supabase.from('cobros').select('id_venta, id_producto, canal_cobro, fecha_pago, metodo_pago, monto_pagado, evidencia, notas');
     const qPedidos = supabase.from('pedidos').select('id_pedido, id_venta, id_compra, id_producto, id_cliente, fecha_pedido, canal_venta, total_pedido, estado_pedido');
     const qEnvios = supabase.from('envios').select('id_envio, producto, id_cliente, id_compra, tipo_envio, fecha_envio, proveedor_logistico, guia_rastreo, costo_envio, origen, destino, estado_envio, fecha_entrega');
-    const qCompras = supabase.from('compras').select('id_compra, id_producto, movimiento, producto_nombre, fecha_compra, id_proveedor, tipo_compra, cantidad_compra, costo_unitario, subtotal, moneda, fecha_vencimiento, estado_pago, observaciones');
+    const qCompras = supabase.from('compras').select('id_compra, id_producto, movimiento, producto_nombre, fecha_compra, id_proveedor, tipo_compra, cantidad_compra, costo_unitario, subtotal, moneda, fecha_vencimiento, estado_pago, observaciones, tipo_cambio_usd');
     const qPagos = supabase.from('pagos_compra').select('id_pago, id_compra, fecha_pago, monto_pago, metodo_pago, referencia');
-    const qGastos = supabase.from('gastos').select('id, categoria, monto, descripcion, fecha');
+    const qGastos = supabase.from('gastos').select('id, categoria, monto, descripcion, fecha, tipo_cambio_usd');
     const qProductos = supabase.from('productos').select('id_producto, nombre_producto, categoria, cantidad_disponible, valor_unitario_promedio, valor_total, fecha_ultima_compra, rotacion_dias');
 
     const cobrosQ = empresaId ? (isEuromex ? qCobros.or(`empresa_id.eq.${empresaId},empresa_id.is.null`) : qCobros.eq('empresa_id', empresaId)) : qCobros;
@@ -123,6 +123,7 @@ export async function GET(req: Request) {
         fecha_compra: toDateStr(r.fecha_compra as string) || undefined,
         fecha_vencimiento: toDateStr(r.fecha_vencimiento as string) || undefined,
         id_producto: r.id_producto ? String(r.id_producto) : undefined,
+        tipo_cambio_usd: r.tipo_cambio_usd != null ? Number(r.tipo_cambio_usd) : undefined,
       };
     });
 
@@ -141,6 +142,7 @@ export async function GET(req: Request) {
       categoria: (String(r.categoria ?? 'operativo').toLowerCase()) as 'fumigacion' | 'empaque' | 'logistica' | 'almacenaje' | 'compras' | 'operativo',
       descripcion: String(r.descripcion ?? ''),
       monto: Number(r.monto ?? 0),
+      tipo_cambio_usd: r.tipo_cambio_usd != null ? Number(r.tipo_cambio_usd) : undefined,
     }));
 
     const ventaToCliente = new Map<string, string>();

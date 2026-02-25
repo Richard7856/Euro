@@ -156,7 +156,7 @@ export default function PreciosVentaPage() {
     }
   };
 
-  const formatMoney = (n: number) => formatCurrency(n, { maxFraction: 2 });
+  const formatMoney = (n: number, rate?: number) => formatCurrency(n, { maxFraction: 2, rate });
   const exportColumns = [
     { key: 'id_producto', label: 'ID Producto' },
     { key: 'nombre_producto', label: 'Producto' },
@@ -235,7 +235,7 @@ export default function PreciosVentaPage() {
                         <span className="font-medium text-slate-200">{p.nombre_producto || p.id_producto}</span>
                         {p.nombre_producto && <span className="text-slate-500 text-xs block">{p.id_producto}</span>}
                       </td>
-                      <td className="py-3 px-4 text-right font-mono text-emerald-400">{formatMoney(p.precio_venta)}</td>
+                      <td className="py-3 px-4 text-right font-mono text-emerald-400">{formatMoney(p.precio_venta, p.tipo_cambio_usd)}</td>
                       <td className="py-3 px-4 text-slate-500">{p.unidad || 'kg'}</td>
                       <td className="py-3 px-4 text-slate-400">{p.vigente_desde ? format(new Date(p.vigente_desde + 'T12:00:00'), 'd MMM yyyy', { locale: es }) : '—'}</td>
                       <td className="py-3 px-4 text-slate-400">{p.vigente_hasta ? format(new Date(p.vigente_hasta + 'T12:00:00'), 'd MMM yyyy', { locale: es }) : '—'}</td>

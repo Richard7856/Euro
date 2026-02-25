@@ -16,6 +16,7 @@ type Gasto = {
   descripcion: string | null;
   fecha: string;
   created_at: string;
+  tipo_cambio_usd?: number;
 };
 
 type EnvioGasto = {
@@ -331,7 +332,7 @@ export default function GastosPage() {
                       </td>
                       <td className="py-3 px-4 font-medium text-slate-200">{areaLabel(f.area)}</td>
                       <td className="py-3 px-4 text-slate-400">{f.descripcion || '—'}</td>
-                      <td className="py-3 px-4 text-right font-mono text-amber-400">{formatCurrency(f.monto)}</td>
+                      <td className="py-3 px-4 text-right font-mono text-amber-400">{formatCurrency(f.monto, { rate: f.tipo === 'gasto' ? (f as GastoUnificado).original?.tipo_cambio_usd : undefined })}</td>
                       <td className="py-3 px-4">
                         {f.editable ? (
                           <div className="flex gap-2">

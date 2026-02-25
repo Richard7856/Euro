@@ -17,8 +17,6 @@ import MetricasOperativas from '@/components/MetricasOperativas';
 import RecomendacionesEstrategicas from '@/components/RecomendacionesEstrategicas';
 import { CashFlowAnalyzer } from '@/lib/cashFlowAnalyzer';
 import { generarAlertasCriticas, generarMetricasOperativas, generarRecomendaciones } from '@/lib/analisisEstrategico';
-import { ventasData, pedidosData, enviosData } from '@/lib/sampleData';
-import { gastosDetallados, comprasData, inventarioData, cuentasPorCobrar, pagosProveedorData } from '@/lib/cashFlowData';
 import type { FiltroFecha, Inventario, CuentaPorCobrar, Envio, Pedido, PagoProveedor } from '@/types/financial';
 import type { Venta } from '@/types/financial';
 import type { GastoDetallado } from '@/types/financial';
@@ -58,14 +56,13 @@ type DatosApi = {
   envios: { id_envio: string; producto: string; id_cliente: string; id_compra: string }[];
   compras: Compra[];
   gastos: GastoDetallado[];
-  pagos: { id_compra: string; monto_pago: number }[];
+  pagos: { id_pago: string; id_compra: string; fecha_pago: string; monto_pago: number }[];
   cuentasPorCobrar: { id_cliente: string; monto_total: number; monto_cobrado: number; monto_pendiente: number }[];
   inventario: { id_producto: string; nombre_producto: string; cantidad_disponible: number; valor_unitario_promedio: number; valor_total: number }[];
 };
 
 export default function FinancieroPage() {
   const empresaContext = useEmpresaOptional();
-  const isEuromex = empresaContext?.empresa === 'euromex';
 
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<string>('');
@@ -86,13 +83,9 @@ export default function FinancieroPage() {
   }, []);
 
   useEffect(() => {
-    if (isEuromex) {
-      const t = setTimeout(() => { setLoading(false); updateTimestamp(); }, 500);
-      return () => clearTimeout(t);
-    }
     let cancelled = false;
     setLoading(true);
-    fetch('/api/datos')
+    fetch('/api/datos', { credentials: 'include' })
       .then((r) => r.ok ? r.json() : Promise.reject(new Error('Error al cargar')))
       .then((json) => {
         if (cancelled) return;
@@ -102,20 +95,32 @@ export default function FinancieroPage() {
           monto_pagado: Number(v.monto_pagado ?? 0),
           id_producto: v.id_producto ? String(v.id_producto) : undefined,
         }));
-        const compras = (json.compras ?? []).map((c: Record<string, unknown>) => ({
-          id_compra: String(c.id_compra ?? ''),
-          producto_nombre: String(c.producto_nombre ?? c.movimiento ?? ''),
-          fecha_compra: c.fecha_compra ? String(c.fecha_compra).slice(0, 10) : undefined,
-          subtotal: Number(c.inversion_mxn ?? c.subtotal ?? 0),
-          pagado_mxn: Number(c.pagado_mxn ?? 0),
-          pendiente_mxn: Number(c.pendiente_mxn ?? 0),
-          id_proveedor: c.proveedor ? String(c.proveedor) : undefined,
-        }));
+        const compras = (json.compras ?? []).map((c: Record<string, unknown>) => {
+          const inv = Number(c.inversion_mxn ?? c.subtotal ?? 0);
+          return {
+            id_compra: String(c.id_compra ?? ''),
+            producto_nombre: String(c.producto_nombre ?? c.movimiento ?? ''),
+            fecha_compra: c.fecha_compra ? String(c.fecha_compra).slice(0, 10) : undefined,
+            kg: Number(c.kg ?? 0),
+            tipo_pago: (String(c.tipo_pago ?? '').toLowerCase().includes('crédito') || String(c.tipo_pago ?? '').toLowerCase().includes('credito') ? 'Crédito' : 'Contado') as 'Crédito' | 'Contado',
+            proveedor: String(c.proveedor ?? c.id_proveedor ?? ''),
+            inversion_mxn: inv,
+            pagado_mxn: Number(c.pagado_mxn ?? 0),
+            pendiente_mxn: Number(c.pendiente_mxn ?? 0),
+            estado: (c.estado as string) || 'Pendiente',
+            nota_clave: c.nota_clave ? String(c.nota_clave) : undefined,
+            fecha_vencimiento: c.fecha_vencimiento ? String(c.fecha_vencimiento).slice(0, 10) : undefined,
+            id_producto: c.id_producto ? String(c.id_producto) : undefined,
+            tipo_cambio_usd: c.tipo_cambio_usd != null ? Number(c.tipo_cambio_usd) : undefined,
+          };
+        });
         const gastos = (json.gastos ?? []).map((g: Record<string, unknown>) => ({
+          id: String((g as { id?: string }).id ?? ''),
           fecha: String(g.fecha ?? '').slice(0, 10),
           categoria: String(g.categoria ?? 'operativo'),
           monto: Number(g.monto ?? 0),
           descripcion: g.descripcion ? String(g.descripcion) : undefined,
+          tipo_cambio_usd: g.tipo_cambio_usd != null ? Number(g.tipo_cambio_usd) : undefined,
         }));
         const inventario = (json.inventario ?? []).map((p: Record<string, unknown>) => ({
           id_producto: String(p.id_producto ?? ''),
@@ -143,7 +148,8 @@ export default function FinancieroPage() {
           id_cliente: String(e.id_cliente ?? ''),
           id_compra: String(e.id_compra ?? ''),
         }));
-        const pagos = (json.pagos ?? []).map((p: Record<string, unknown>) => ({
+        const pagos = (json.pagos ?? []).map((p: Record<string, unknown>, i: number) => ({
+          id_pago: String(p.id_pago ?? `pago-${i}`),
           id_compra: String(p.id_compra ?? ''),
           fecha_pago: String(p.fecha_pago ?? '').slice(0, 10),
           monto_pago: Number(p.monto_pago ?? 0),
@@ -163,16 +169,11 @@ export default function FinancieroPage() {
         }
       });
     return () => { cancelled = true; };
-  }, [isEuromex, updateTimestamp]);
+  }, [updateTimestamp]);
 
   const handleRefresh = useCallback(() => {
-    if (isEuromex) {
-      setLoading(true);
-      setTimeout(() => { setLoading(false); updateTimestamp(); }, 500);
-      return;
-    }
     setLoading(true);
-    fetch('/api/datos')
+    fetch('/api/datos', { credentials: 'include' })
       .then((r) => r.ok ? r.json() : Promise.reject(new Error('Error')))
       .then((json) => {
         const ventas = (json.ventas ?? []).map((v: Record<string, unknown>) => ({
@@ -181,20 +182,32 @@ export default function FinancieroPage() {
           monto_pagado: Number(v.monto_pagado ?? 0),
           id_producto: v.id_producto ? String(v.id_producto) : undefined,
         }));
-        const compras = (json.compras ?? []).map((c: Record<string, unknown>) => ({
-          id_compra: String(c.id_compra ?? ''),
-          producto_nombre: String(c.producto_nombre ?? c.movimiento ?? ''),
-          fecha_compra: c.fecha_compra ? String(c.fecha_compra).slice(0, 10) : undefined,
-          subtotal: Number(c.inversion_mxn ?? c.subtotal ?? 0),
-          pagado_mxn: Number(c.pagado_mxn ?? 0),
-          pendiente_mxn: Number(c.pendiente_mxn ?? 0),
-          id_proveedor: c.proveedor ? String(c.proveedor) : undefined,
-        }));
+        const compras = (json.compras ?? []).map((c: Record<string, unknown>) => {
+          const inv = Number(c.inversion_mxn ?? c.subtotal ?? 0);
+          return {
+            id_compra: String(c.id_compra ?? ''),
+            producto_nombre: String(c.producto_nombre ?? c.movimiento ?? ''),
+            fecha_compra: c.fecha_compra ? String(c.fecha_compra).slice(0, 10) : undefined,
+            kg: Number(c.kg ?? 0),
+            tipo_pago: (String(c.tipo_pago ?? '').toLowerCase().includes('crédito') || String(c.tipo_pago ?? '').toLowerCase().includes('credito') ? 'Crédito' : 'Contado') as 'Crédito' | 'Contado',
+            proveedor: String(c.proveedor ?? c.id_proveedor ?? ''),
+            inversion_mxn: inv,
+            pagado_mxn: Number(c.pagado_mxn ?? 0),
+            pendiente_mxn: Number(c.pendiente_mxn ?? 0),
+            estado: (c.estado as string) || 'Pendiente',
+            nota_clave: c.nota_clave ? String(c.nota_clave) : undefined,
+            fecha_vencimiento: c.fecha_vencimiento ? String(c.fecha_vencimiento).slice(0, 10) : undefined,
+            id_producto: c.id_producto ? String(c.id_producto) : undefined,
+            tipo_cambio_usd: c.tipo_cambio_usd != null ? Number(c.tipo_cambio_usd) : undefined,
+          };
+        });
         const gastos = (json.gastos ?? []).map((g: Record<string, unknown>) => ({
+          id: String((g as { id?: string }).id ?? ''),
           fecha: String(g.fecha ?? '').slice(0, 10),
           categoria: String(g.categoria ?? 'operativo'),
           monto: Number(g.monto ?? 0),
           descripcion: g.descripcion ? String(g.descripcion) : undefined,
+          tipo_cambio_usd: g.tipo_cambio_usd != null ? Number(g.tipo_cambio_usd) : undefined,
         }));
         const inventario = (json.inventario ?? []).map((p: Record<string, unknown>) => ({
           id_producto: String(p.id_producto ?? ''),
@@ -222,7 +235,8 @@ export default function FinancieroPage() {
           id_cliente: String(e.id_cliente ?? ''),
           id_compra: String(e.id_compra ?? ''),
         }));
-        const pagos = (json.pagos ?? []).map((p: Record<string, unknown>) => ({
+        const pagos = (json.pagos ?? []).map((p: Record<string, unknown>, i: number) => ({
+          id_pago: String(p.id_pago ?? `pago-${i}`),
           id_compra: String(p.id_compra ?? ''),
           fecha_pago: String(p.fecha_pago ?? '').slice(0, 10),
           monto_pago: Number(p.monto_pago ?? 0),
@@ -232,13 +246,12 @@ export default function FinancieroPage() {
         updateTimestamp();
       })
       .catch(() => { setLoading(false); updateTimestamp(); });
-  }, [isEuromex, updateTimestamp]);
+  }, [updateTimestamp]);
 
-  const ventasBase = isEuromex ? ventasData : (datosApi?.ventas ?? []);
-  const gastosBase = isEuromex ? gastosDetallados : (datosApi?.gastos ?? []);
-  const comprasBase = isEuromex ? comprasData : (datosApi?.compras ?? []);
+  const ventasBase = datosApi?.ventas ?? [];
+  const gastosBase = datosApi?.gastos ?? [];
+  const comprasBase = datosApi?.compras ?? [];
   const inventarioBase = useMemo((): Inventario[] => {
-    if (isEuromex) return inventarioData;
     const raw = datosApi?.inventario ?? [];
     return raw.map((p) => ({
       id_producto: p.id_producto,
@@ -249,9 +262,8 @@ export default function FinancieroPage() {
       fecha_ultima_compra: '',
       rotacion_dias: 0
     }));
-  }, [isEuromex, datosApi?.inventario]);
+  }, [datosApi?.inventario]);
   const cxCBase = useMemo((): CuentaPorCobrar[] => {
-    if (isEuromex) return cuentasPorCobrar;
     const raw = datosApi?.cuentasPorCobrar ?? [];
     return raw.map((c) => ({
       id_venta: '',
@@ -264,9 +276,8 @@ export default function FinancieroPage() {
       dias_vencido: 0,
       estado: 'vigente' as const
     }));
-  }, [isEuromex, datosApi?.cuentasPorCobrar]);
+  }, [datosApi?.cuentasPorCobrar]);
   const pedidosBase = useMemo((): Pedido[] => {
-    if (isEuromex) return pedidosData;
     const raw = datosApi?.pedidos ?? [];
     return raw.map((p) => ({
       id_pedido: p.id_pedido,
@@ -277,9 +288,8 @@ export default function FinancieroPage() {
       canal_venta: '',
       estado_pedido: 'Pendiente' as const
     }));
-  }, [isEuromex, datosApi?.pedidos]);
+  }, [datosApi?.pedidos]);
   const enviosBase = useMemo((): Envio[] => {
-    if (isEuromex) return enviosData;
     const raw = datosApi?.envios ?? [];
     return raw.map((e) => ({
       id_envio: e.id_envio,
@@ -295,18 +305,17 @@ export default function FinancieroPage() {
       destino: '',
       estado_envio: ''
     }));
-  }, [isEuromex, datosApi?.envios]);
+  }, [datosApi?.envios]);
   const pagosBase = useMemo((): PagoProveedor[] => {
-    if (isEuromex) return pagosProveedorData;
     const raw = datosApi?.pagos ?? [];
-    return raw.map((p, i) => ({
-      id_pago: `pago-${i}`,
+    return raw.map((p: { id_compra: string; fecha_pago?: string; monto_pago: number; id_pago?: string }, i: number) => ({
+      id_pago: p.id_pago ?? `pago-${i}`,
       id_compra: p.id_compra,
-      fecha_pago: '',
+      fecha_pago: p.fecha_pago ?? '',
       monto_pago: p.monto_pago,
       metodo_pago: ''
     }));
-  }, [isEuromex, datosApi?.pagos]);
+  }, [datosApi?.pagos]);
 
   const ventasPorFecha = useMemo(() => filterByDateRange(ventasBase, (v) => (v as Venta).fecha_pago, filtroFecha), [filtroFecha, ventasBase]);
   const gastosFiltrados = useMemo(() => filterByDateRange(gastosBase, (g) => (g as GastoDetallado).fecha, filtroFecha), [filtroFecha, gastosBase]);
@@ -386,7 +395,6 @@ export default function FinancieroPage() {
             {lastUpdate && <p className="text-sm text-slate-500 mt-1">Última actualización: {lastUpdate}</p>}
           </div>
           <div className="flex gap-2 items-center flex-wrap">
-            <a href="/dinamico" className="btn-secondary flex items-center gap-2">📊 Datos en vivo</a>
             <button onClick={handleRefresh} className="btn-primary flex items-center gap-2 hover:scale-105 transition-transform">
               <ArrowPathIcon className="w-5 h-5" /> Actualizar
             </button>

@@ -131,6 +131,8 @@ export interface GastoDetallado {
   proveedor?: string;
   id_producto?: string;
   id_compra?: string;
+  /** Tipo de cambio USD→MXN al guardar; solo afecta visualización en USD */
+  tipo_cambio_usd?: number;
 }
 
 // Estados extendidos según screenshot
@@ -150,6 +152,8 @@ export interface Compra {
   fecha_compra?: string; // Mantener opcional para compatibilidad
   fecha_vencimiento?: string; // Para timer de cobros
   id_producto?: string; // Mantener opcional
+  /** Tipo de cambio USD→MXN al guardar; solo afecta visualización en USD (no recalcula existentes) */
+  tipo_cambio_usd?: number;
 }
 
 export interface PagoProveedor {
@@ -277,6 +281,7 @@ export interface PrecioProveedor {
   observaciones: string | null;
   empresa_id: string | null;
   created_at: string;
+  tipo_cambio_usd?: number;
 }
 
 export interface PrecioVenta {
@@ -292,5 +297,6 @@ export interface PrecioVenta {
   empresa_id: string | null;
   created_at: string;
   updated_at: string;
+  tipo_cambio_usd?: number;
 }
 

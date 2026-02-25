@@ -57,7 +57,7 @@ export default function PagosPanel({ pagos, compras }: PagosPanelProps) {
                 </div>
                 <div>
                   <div className="text-xs text-slate-500">Monto</div>
-                  <div className="text-sm font-bold theme-accent">{formatCurrency(pago.monto_pago)}</div>
+                  <div className="text-sm font-bold theme-accent">{formatCurrency(pago.monto_pago, { rate: pago.compra?.tipo_cambio_usd })}</div>
                 </div>
                 <div>
                   <div className="text-xs text-slate-500">Método</div>

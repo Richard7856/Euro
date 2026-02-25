@@ -75,8 +75,8 @@ export default function ComprasSection({ compras }: ComprasSectionProps) {
                   <td className="py-3 px-4 text-slate-200 font-semibold">{compra.producto_nombre}</td>
                   <td className="py-3 px-4 text-slate-300">{compra.tipo_pago}</td>
                   <td className="py-3 px-4 text-slate-400">{compra.proveedor}</td>
-                  <td className="py-3 px-4 text-right text-slate-200">{formatCurrency(compra.inversion_mxn)}</td>
-                  <td className="py-3 px-4 text-right text-orange-400">{formatCurrency(compra.pendiente_mxn)}</td>
+                  <td className="py-3 px-4 text-right text-slate-200">{formatCurrency(compra.inversion_mxn, { rate: compra.tipo_cambio_usd })}</td>
+                  <td className="py-3 px-4 text-right text-orange-400">{formatCurrency(compra.pendiente_mxn, { rate: compra.tipo_cambio_usd })}</td>
                   <td className="py-3 px-4">{getStatusBadge(compra.estado)}</td>
                   <td className="py-3 px-4">
                     {timer ? (

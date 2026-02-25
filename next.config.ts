@@ -1,9 +1,9 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
-  // Descomenta la línea siguiente solo si subes a hosting estático (sin API):
-  // output: 'export',
-  /* config options here */
+  // Fija la raíz del proyecto (evita warning con múltiples lockfiles, ej. iCloud)
+  turbopack: { root: path.resolve(process.cwd()) },
 };
 
 export default nextConfig;

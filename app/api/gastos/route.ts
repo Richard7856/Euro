@@ -55,6 +55,9 @@ export async function POST(req: Request) {
 
     const montoNum = parseFloat(String(monto).replace(/[^0-9.-]/g, '')) || 0;
     const empresaId = getEmpresaIdFromRequest(req);
+    const { data: cfg } = await supabase.from('app_config').select('value').eq('key', 'usd_to_mxn').single();
+    const rate = cfg?.value ? parseFloat(String(cfg.value)) : 18;
+    const tipoCambioUsd = Number.isFinite(rate) && rate > 0 ? rate : 18;
 
     const insertData: Record<string, unknown> = {
       categoria: String(categoria).trim(),
@@ -62,6 +65,7 @@ export async function POST(req: Request) {
       descripcion: descripcion ? String(descripcion).trim() : null,
       fecha: fecha || new Date().toISOString().slice(0, 10),
       usuario_id: user.id,
+      tipo_cambio_usd: tipoCambioUsd,
     };
     if (empresaId) insertData.empresa_id = empresaId;
 
@@ -102,6 +106,9 @@ export async function PATCH(req: Request) {
     if (monto !== undefined) updates.monto = parseFloat(String(monto).replace(/[^0-9.-]/g, '')) || 0;
     if (descripcion !== undefined) updates.descripcion = descripcion ? String(descripcion).trim() : null;
     if (fecha !== undefined) updates.fecha = String(fecha).slice(0, 10) || null;
+    const { data: cfg } = await supabase.from('app_config').select('value').eq('key', 'usd_to_mxn').single();
+    const rate = cfg?.value ? parseFloat(String(cfg.value)) : 18;
+    updates.tipo_cambio_usd = Number.isFinite(rate) && rate > 0 ? rate : 18;
 
     const { data: row, error } = await supabase
       .from('gastos')

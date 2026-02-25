@@ -8,10 +8,10 @@ import {
   UserGroupIcon,
   TruckIcon,
   CalendarDaysIcon,
-  ChartBarIcon,
   ArrowRightIcon,
   BuildingStorefrontIcon,
   BanknotesIcon,
+  MapPinIcon,
 } from '@heroicons/react/24/outline';
 import { useEmpresaOptional } from '@/lib/empresaContext';
 import { useCurrency } from '@/lib/currencyContext';
@@ -46,14 +46,14 @@ function filterByDateRange<T>(items: T[], getDate: (item: T) => string | undefin
 
 
 const modules = [
-  { href: '/financiero', label: 'Financiero', desc: 'Efectivo, CxC, CxP, ventas, compras y análisis', Icon: CurrencyDollarIcon },
+  { href: '/financiero', label: 'Financiero', desc: 'Efectivo, CxC, CxP, ventas, compras y análisis en tiempo real', Icon: CurrencyDollarIcon },
   { href: '/mercancia', label: 'Mercancía y almacenes', desc: 'Ubicación de mercancía por almacén', Icon: CubeIcon },
   { href: '/bodegas', label: 'Bodegas', desc: 'Inventario por bodega, entradas y salidas', Icon: BuildingStorefrontIcon },
   { href: '/clientes', label: 'Clientes y crédito', desc: 'Clientes, crédito y cobranza', Icon: UserGroupIcon },
-  { href: '/contenedores', label: 'Contenedores', desc: 'Seguimiento de contenedores en tránsito', Icon: TruckIcon },
+  { href: '/compras', label: 'Compras y envíos', desc: 'Compras a proveedores y tabla de envíos y logística', Icon: TruckIcon },
+  { href: '/contenedores', label: 'Contenedores', desc: 'Mapa de rastreo de contenedores (temperatura, ubicación). Próximamente', Icon: MapPinIcon },
   { href: '/precios', label: 'Precios proveedores', desc: 'Precios recibidos de proveedores y precios de venta final', Icon: BanknotesIcon },
   { href: '/promesas', label: 'Promesas de pago', desc: 'Promesas de proveedores y clientes', Icon: CalendarDaysIcon },
-  { href: '/dinamico', label: 'Datos en vivo', desc: 'Dashboard conectado a Supabase', Icon: ChartBarIcon },
 ];
 
 const EMPTY_VENTAS: Venta[] = [];

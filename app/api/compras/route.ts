@@ -53,6 +53,10 @@ export async function POST(req: Request) {
 
     if (!id_compra) return NextResponse.json({ error: 'Se requiere id_compra' }, { status: 400 });
 
+    const { data: cfg } = await supabase.from('app_config').select('value').eq('key', 'usd_to_mxn').single();
+    const rate = cfg?.value ? parseFloat(String(cfg.value)) : 18;
+    const tipoCambioUsd = Number.isFinite(rate) && rate > 0 ? rate : 18;
+
     const empresaId = getEmpresaIdFromRequest(req);
     const sub = subtotal != null ? parseFloat(String(subtotal).replace(/[^0-9.-]/g, '')) : (parseFloat(String(cantidad_compra || 0)) * parseFloat(String(costo_unitario || 0)));
 
@@ -71,6 +75,7 @@ export async function POST(req: Request) {
       fecha_vencimiento: fecha_vencimiento ? String(fecha_vencimiento).slice(0, 10) : null,
       estado_pago: estado_pago ? String(estado_pago).trim() : 'Pendiente',
       observaciones: observaciones ? String(observaciones).trim() : null,
+      tipo_cambio_usd: tipoCambioUsd,
     };
     if (empresaId) insertData.empresa_id = empresaId;
 
@@ -96,7 +101,8 @@ export async function PATCH(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
-    if (!id) return NextResponse.json({ error: 'Falta id (uuid)' }, { status: 400 });
+    const id_compra = searchParams.get('id_compra');
+    if (!id && !id_compra) return NextResponse.json({ error: 'Falta id (uuid) o id_compra' }, { status: 400 });
 
     const body = await req.json();
     const updates: Record<string, unknown> = {};
@@ -117,8 +123,14 @@ export async function PATCH(req: Request) {
     if (body.estado_pago !== undefined) updates.estado_pago = str(body.estado_pago) || 'Pendiente';
     if (body.observaciones !== undefined) updates.observaciones = str(body.observaciones);
     updates.updated_at = new Date().toISOString();
+    const { data: cfg } = await supabase.from('app_config').select('value').eq('key', 'usd_to_mxn').single();
+    const rate = cfg?.value ? parseFloat(String(cfg.value)) : 18;
+    updates.tipo_cambio_usd = Number.isFinite(rate) && rate > 0 ? rate : 18;
 
-    const { data: row, error } = await supabase.from('compras').update(updates).eq('id', id).select().single();
+    let query = supabase.from('compras').update(updates);
+    if (id) query = query.eq('id', id);
+    else query = query.eq('id_compra', id_compra!);
+    const { data: row, error } = await query.select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true, compra: row });
   } catch (err) {
@@ -135,9 +147,13 @@ export async function DELETE(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
-    if (!id) return NextResponse.json({ error: 'Falta id' }, { status: 400 });
+    const id_compra = searchParams.get('id_compra');
+    if (!id && !id_compra) return NextResponse.json({ error: 'Falta id o id_compra' }, { status: 400 });
 
-    const { error } = await supabase.from('compras').delete().eq('id', id);
+    let query = supabase.from('compras').delete();
+    if (id) query = query.eq('id', id);
+    else query = query.eq('id_compra', id_compra!);
+    const { error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   } catch (err) {

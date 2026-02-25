@@ -66,6 +66,9 @@ export async function POST(req: Request) {
     if (precio < 0) return NextResponse.json({ error: 'precio_venta debe ser >= 0' }, { status: 400 });
 
     const empresaId = getEmpresaIdFromRequest(req);
+    const { data: cfg } = await supabase.from('app_config').select('value').eq('key', 'usd_to_mxn').single();
+    const rate = cfg?.value ? parseFloat(String(cfg.value)) : 18;
+    const tipoCambioUsd = Number.isFinite(rate) && rate > 0 ? rate : 18;
     const row: Record<string, unknown> = {
       id_producto: String(id_producto).trim(),
       nombre_producto: nombre_producto ? String(nombre_producto).trim() : null,
@@ -75,6 +78,7 @@ export async function POST(req: Request) {
       vigente_desde: toDateStr(vigente_desde) || new Date().toISOString().slice(0, 10),
       vigente_hasta: toDateStr(vigente_hasta) || null,
       origen: (origen && String(origen).trim()) || 'manual',
+      tipo_cambio_usd: tipoCambioUsd,
     };
     if (empresaId) row.empresa_id = empresaId;
 
@@ -107,6 +111,9 @@ export async function PATCH(req: Request) {
     if (body.vigente_desde !== undefined) updates.vigente_desde = toDateStr(body.vigente_desde) || null;
     if (body.vigente_hasta !== undefined) updates.vigente_hasta = body.vigente_hasta ? toDateStr(body.vigente_hasta) : null;
     if (body.origen !== undefined) updates.origen = String(body.origen).trim() || 'manual';
+    const { data: cfg } = await supabase.from('app_config').select('value').eq('key', 'usd_to_mxn').single();
+    const rate = cfg?.value ? parseFloat(String(cfg.value)) : 18;
+    updates.tipo_cambio_usd = Number.isFinite(rate) && rate > 0 ? rate : 18;
 
     const { data, error } = await supabase.from('precios_venta').update(updates).eq('id', id).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

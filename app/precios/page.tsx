@@ -208,7 +208,7 @@ export default function PreciosProveedorPage() {
   };
 
   const toMxn = (n: number, moneda: string) => (moneda && String(moneda).toUpperCase() === 'USD' ? n * USD_TO_MXN : n);
-  const formatMoney = (n: number, moneda: string) => formatCurrency(toMxn(n, moneda), { maxFraction: 2 });
+  const formatMoney = (n: number, moneda: string, rate?: number) => formatCurrency(toMxn(n, moneda), { maxFraction: 2, rate });
   const productoConcepto = (p: PrecioProveedor) => p.id_producto || p.concepto || '—';
 
   const exportColumns = [
@@ -338,7 +338,7 @@ export default function PreciosProveedorPage() {
                       <td className="py-3 px-4 text-slate-400">{p.fecha ? format(new Date(p.fecha + 'T12:00:00'), 'd MMM yyyy', { locale: es }) : '—'}</td>
                       <td className="py-3 px-4 font-medium text-slate-200">{p.nombre_proveedor || p.id_proveedor}</td>
                       <td className="py-3 px-4 text-slate-300">{productoConcepto(p)}</td>
-                      <td className="py-3 px-4 text-right font-mono text-amber-400">{formatMoney(p.precio, p.moneda)}</td>
+                      <td className="py-3 px-4 text-right font-mono text-amber-400">{formatMoney(p.precio, p.moneda, p.tipo_cambio_usd)}</td>
                       <td className="py-3 px-4 text-slate-500">{p.unidad || 'kg'}</td>
                       <td className="py-3 px-4 text-slate-500">{p.fuente || '—'}</td>
                       <td className="py-3 px-4 flex gap-2">

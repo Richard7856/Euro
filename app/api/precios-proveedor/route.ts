@@ -79,6 +79,9 @@ export async function POST(req: Request) {
     const body = await req.json();
     const empresaId = getEmpresaIdFromRequest(req);
     const items = Array.isArray(body) ? body : [body];
+    const { data: cfg } = await supabase.from('app_config').select('value').eq('key', 'usd_to_mxn').single();
+    const rate = cfg?.value ? parseFloat(String(cfg.value)) : 18;
+    const tipoCambioUsd = Number.isFinite(rate) && rate > 0 ? rate : 18;
 
     const inserted: Record<string, unknown>[] = [];
     for (const item of items) {
@@ -101,6 +104,7 @@ export async function POST(req: Request) {
         fuente: FUENTES.includes(item.fuente) ? item.fuente : 'manual',
         referencia: item.referencia != null ? String(item.referencia).trim() : null,
         observaciones: item.observaciones != null ? String(item.observaciones).trim() : null,
+        tipo_cambio_usd: tipoCambioUsd,
       };
       if (empresaId) row.empresa_id = empresaId;
 
@@ -145,6 +149,9 @@ export async function PATCH(req: Request) {
     if (body.fuente !== undefined) updates.fuente = FUENTES.includes(body.fuente) ? body.fuente : undefined;
     if (body.referencia !== undefined) updates.referencia = body.referencia ? String(body.referencia).trim() : null;
     if (body.observaciones !== undefined) updates.observaciones = body.observaciones ? String(body.observaciones).trim() : null;
+    const { data: cfg } = await supabase.from('app_config').select('value').eq('key', 'usd_to_mxn').single();
+    const rate = cfg?.value ? parseFloat(String(cfg.value)) : 18;
+    updates.tipo_cambio_usd = Number.isFinite(rate) && rate > 0 ? rate : 18;
 
     const { data, error } = await supabase
       .from('precios_proveedor')

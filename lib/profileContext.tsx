@@ -14,7 +14,7 @@ export interface Profile {
 }
 
 /** Módulos que se pueden restringir por usuario (clave = ruta o identificador) */
-export const MODULE_KEYS = ['inicio', 'financiero', 'ventas', 'compras', 'mercancia', 'clientes', 'proveedores', 'gastos', 'contenedores', 'promesas', 'dinamico', 'cobranza', 'cotizador', 'perfiles', 'usuarios'] as const;
+export const MODULE_KEYS = ['inicio', 'financiero', 'ventas', 'compras', 'mercancia', 'bodegas', 'contenedores', 'clientes', 'proveedores', 'gastos', 'promesas', 'cobranza', 'cotizador', 'perfiles', 'usuarios'] as const;
 export type ModuleKey = (typeof MODULE_KEYS)[number];
 
 interface ProfileContextValue {
