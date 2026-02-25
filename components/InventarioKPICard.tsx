@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { KPI } from '@/types/financial';
 import { Inventario } from '@/types/financial';
+import { useCurrency } from '@/lib/currencyContext';
 
 interface InventarioKPICardProps {
   kpi: KPI;
@@ -12,15 +13,7 @@ interface InventarioKPICardProps {
 
 export default function InventarioKPICard({ kpi, inventario }: InventarioKPICardProps) {
   const [expanded, setExpanded] = useState(false);
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
-  };
+  const { formatCurrency } = useCurrency();
 
   const formatValue = () => {
     switch (kpi.format) {

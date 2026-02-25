@@ -1,5 +1,6 @@
 'use client';
 
+import { useCurrency } from '@/lib/currencyContext';
 import { Compra } from '@/types/financial';
 import { parseISO, differenceInDays } from 'date-fns';
 
@@ -8,14 +9,7 @@ interface ComprasSectionProps {
 }
 
 export default function ComprasSection({ compras }: ComprasSectionProps) {
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
-  };
+  const { formatCurrency } = useCurrency();
 
   const parseFechaVenc = (s: string): Date | null => {
     try {

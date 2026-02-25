@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { CubeIcon, ArrowLeftIcon, ChartBarIcon } from '@heroicons/react/24/outline';
+import { CubeIcon, ArrowLeftIcon, ChartBarIcon, BuildingStorefrontIcon, FunnelIcon } from '@heroicons/react/24/outline';
+import { useCurrency } from '@/lib/currencyContext';
+import ExportButtons from '@/components/ExportButtons';
 
 type Producto = {
   id_producto: string;
@@ -12,13 +14,22 @@ type Producto = {
   valor_total: number;
 };
 
-const formatCurrency = (n: number) =>
-  new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(n);
-
 export default function MercanciaPage() {
   const [inventario, setInventario] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filtroTexto, setFiltroTexto] = useState('');
+  const { formatCurrency } = useCurrency();
+
+  const inventarioFiltrado = useMemo(() => {
+    if (!filtroTexto.trim()) return inventario;
+    const t = filtroTexto.toLowerCase().trim();
+    return inventario.filter(
+      (p) =>
+        (p.id_producto || '').toLowerCase().includes(t) ||
+        (p.nombre_producto || '').toLowerCase().includes(t)
+    );
+  }, [inventario, filtroTexto]);
 
   useEffect(() => {
     fetch('/api/datos')
@@ -28,7 +39,21 @@ export default function MercanciaPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const totalValor = inventario.reduce((s, p) => s + (p.valor_total ?? 0), 0);
+  const totalValor = inventarioFiltrado.reduce((s, p) => s + (p.valor_total ?? 0), 0);
+  const exportColumns = [
+    { key: 'id_producto', label: 'ID' },
+    { key: 'nombre_producto', label: 'Producto' },
+    { key: 'cantidad_disponible', label: 'Cantidad' },
+    { key: 'valor_unitario_promedio', label: 'Valor unit.' },
+    { key: 'valor_total', label: 'Valor total' },
+  ];
+  const exportRows = inventarioFiltrado.map((p) => ({
+    id_producto: p.id_producto,
+    nombre_producto: p.nombre_producto,
+    cantidad_disponible: p.cantidad_disponible,
+    valor_unitario_promedio: p.valor_unitario_promedio,
+    valor_total: p.valor_total,
+  }));
 
   return (
     <main className="min-h-screen page-bg text-slate-50 p-4 md:p-8">
@@ -46,10 +71,29 @@ export default function MercanciaPage() {
               <p className="text-slate-400">Productos y valor en almacén. Los datos se alimentan desde Supabase.</p>
             </div>
           </div>
-          <Link href="/dinamico" className="btn-secondary flex items-center gap-2">
-            <ChartBarIcon className="w-5 h-5" /> Ver en dashboard
-          </Link>
+          <div className="flex gap-2 flex-wrap">
+            <ExportButtons title="Inventario" columns={exportColumns} rows={exportRows} filenameBase="inventario" />
+            <Link href="/bodegas" className="btn-secondary flex items-center gap-2">
+              <BuildingStorefrontIcon className="w-5 h-5" /> Bodegas
+            </Link>
+            <Link href="/dinamico" className="btn-secondary flex items-center gap-2">
+              <ChartBarIcon className="w-5 h-5" /> Ver en dashboard
+            </Link>
+          </div>
         </div>
+
+        {!loading && inventario.length > 0 && (
+          <div className="rounded-xl bg-slate-800/40 border border-slate-700/50 p-4 flex flex-wrap items-center gap-4">
+            <FunnelIcon className="w-5 h-5 text-slate-400" />
+            <input
+              type="text"
+              value={filtroTexto}
+              onChange={(e) => setFiltroTexto(e.target.value)}
+              placeholder="Filtrar por ID o nombre..."
+              className="rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-slate-200 text-sm w-64"
+            />
+          </div>
+        )}
 
         {!loading && inventario.length > 0 && (
           <div className="rounded-xl bg-slate-800/40 border border-slate-700/50 p-4">
@@ -75,7 +119,7 @@ export default function MercanciaPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
-                  {inventario.map((p) => (
+                  {inventarioFiltrado.map((p) => (
                     <tr key={p.id_producto} className="hover:bg-slate-800/30">
                       <td className="py-3 px-4 font-mono text-blue-400">{p.id_producto}</td>
                       <td className="py-3 px-4 font-medium text-slate-200">{p.nombre_producto}</td>
@@ -87,7 +131,7 @@ export default function MercanciaPage() {
                 </tbody>
               </table>
             </div>
-            {inventario.length === 0 && (
+            {inventarioFiltrado.length === 0 && (
               <div className="p-12 text-center text-slate-500">
                 No hay productos en inventario. Registra productos en la base de datos o ejecuta la migración desde Sheets (admin).
               </div>

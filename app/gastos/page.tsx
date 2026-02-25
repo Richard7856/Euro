@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeftIcon, BanknotesIcon, PlusIcon, PencilIcon, TrashIcon, TruckIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, BanknotesIcon, PlusIcon, PencilIcon, TrashIcon, FunnelIcon } from '@heroicons/react/24/outline';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useEmpresaOptional } from '@/lib/empresaContext';
+import { useCurrency } from '@/lib/currencyContext';
+import ExportButtons from '@/components/ExportButtons';
 
 type Gasto = {
   id: string;
@@ -29,6 +31,40 @@ type EnvioGasto = {
 
 const CATEGORIAS = ['fumigacion', 'empaque', 'logistica', 'almacenaje', 'compras', 'operativo'];
 
+const AREA_LABELS: Record<string, string> = {
+  fumigacion: 'Fumigación',
+  empaque: 'Empaque',
+  logistica: 'Logística',
+  almacenaje: 'Almacén',
+  compras: 'Compras',
+  operativo: 'Operativo',
+  Logística: 'Logística',
+  Almacenaje: 'Almacén',
+};
+
+type GastoUnificado = {
+  tipo: 'gasto';
+  id: string;
+  fecha: string;
+  area: string;
+  descripcion: string | null;
+  monto: number;
+  editable: true;
+  original: Gasto;
+};
+type EnvioUnificado = {
+  tipo: 'envio';
+  id: string;
+  fecha: string;
+  area: string;
+  descripcion: string;
+  monto: number;
+  editable: false;
+};
+function areaLabel(cat: string): string {
+  return AREA_LABELS[cat] ?? cat;
+}
+
 export default function GastosPage() {
   const empresa = useEmpresaOptional()?.empresa;
   const [gastos, setGastos] = useState<Gasto[]>([]);
@@ -45,6 +81,11 @@ export default function GastosPage() {
     fecha: new Date().toISOString().slice(0, 10),
   });
   const [saving, setSaving] = useState(false);
+  const [filtroFechaDesde, setFiltroFechaDesde] = useState('');
+  const [filtroFechaHasta, setFiltroFechaHasta] = useState('');
+  const [filtroArea, setFiltroArea] = useState('');
+
+  const { formatCurrency } = useCurrency();
 
   const fetchGastos = useCallback(() => {
     setLoading(true);
@@ -142,11 +183,55 @@ export default function GastosPage() {
     }
   };
 
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
   const totalGastos = gastos.reduce((s, g) => s + g.monto, 0);
   const totalEnvios = envios.reduce((s, e) => s + (e.costo_envio ?? 0), 0);
-  const tipoLabel = (t: string) => (String(t).toLowerCase().includes('resguardo') ? 'Almacenaje' : 'Logística');
+  const totalGeneral = totalGastos + totalEnvios;
+
+  const filasUnificadas: (GastoUnificado | EnvioUnificado)[] = [
+    ...gastos.map((g): GastoUnificado => ({
+      tipo: 'gasto',
+      id: g.id,
+      fecha: g.fecha,
+      area: g.categoria,
+      descripcion: g.descripcion,
+      monto: g.monto,
+      editable: true as const,
+      original: g,
+    })),
+    ...envios.map((e): EnvioUnificado => ({
+      tipo: 'envio',
+      id: e.id_envio,
+      fecha: e.fecha_envio ?? '',
+      area: String(e.tipo_envio).toLowerCase().includes('resguardo') ? 'Almacenaje' : 'Logística',
+      descripcion: [e.producto, e.origen && e.destino ? `${e.origen} → ${e.destino}` : ''].filter(Boolean).join(' · ') || '—',
+      monto: e.costo_envio ?? 0,
+      editable: false as const,
+    })),
+  ].sort((a, b) => {
+    if (!a.fecha || !b.fecha) return 0;
+    return new Date(b.fecha + 'T12:00:00').getTime() - new Date(a.fecha + 'T12:00:00').getTime();
+  });
+
+  const filasFiltradas = filasUnificadas.filter((f) => {
+    if (filtroArea && areaLabel(f.area) !== filtroArea && f.area !== filtroArea) return false;
+    if (filtroFechaDesde && f.fecha && f.fecha < filtroFechaDesde) return false;
+    if (filtroFechaHasta && f.fecha && f.fecha > filtroFechaHasta) return false;
+    return true;
+  });
+
+  const totalFiltrado = filasFiltradas.reduce((s, f) => s + f.monto, 0);
+  const exportColumns = [
+    { key: 'fecha', label: 'Fecha' },
+    { key: 'area', label: 'Área' },
+    { key: 'descripcion', label: 'Descripción' },
+    { key: 'monto', label: 'Monto' },
+  ];
+  const exportRows = filasFiltradas.map((f) => ({
+    fecha: f.fecha ? format(new Date(f.fecha + 'T12:00:00'), 'yyyy-MM-dd', { locale: es }) : '',
+    area: areaLabel(f.area),
+    descripcion: f.descripcion || '—',
+    monto: f.monto,
+  }));
 
   return (
     <main className="min-h-screen page-bg text-slate-50 p-4 md:p-8">
@@ -164,24 +249,60 @@ export default function GastosPage() {
               <p className="text-slate-400">Registra, edita y elimina gastos. También puedes usar el chat: gasto categoria monto</p>
             </div>
           </div>
-          <button onClick={openNew} className="btn-primary flex items-center gap-2">
-            <PlusIcon className="w-5 h-5" /> Nuevo gasto
-          </button>
+          <div className="flex gap-2 flex-wrap">
+            <ExportButtons
+              title="Gastos"
+              columns={exportColumns}
+              rows={exportRows}
+              filenameBase="gastos"
+              getRowCells={(r) => [String(r.fecha), String(r.area), String(r.descripcion), String(r.monto)]}
+            />
+            <button onClick={openNew} className="btn-primary flex items-center gap-2">
+              <PlusIcon className="w-5 h-5" /> Nuevo gasto
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-xl bg-slate-800/40 border border-slate-700/50 p-4 flex flex-wrap items-center gap-4">
+          <FunnelIcon className="w-5 h-5 text-slate-400" />
+          <span className="text-slate-400 text-sm">Filtros:</span>
+          <input
+            type="date"
+            value={filtroFechaDesde}
+            onChange={(e) => setFiltroFechaDesde(e.target.value)}
+            className="rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-slate-200 text-sm"
+            placeholder="Desde"
+          />
+          <input
+            type="date"
+            value={filtroFechaHasta}
+            onChange={(e) => setFiltroFechaHasta(e.target.value)}
+            className="rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-slate-200 text-sm"
+            placeholder="Hasta"
+          />
+          <select
+            value={filtroArea}
+            onChange={(e) => setFiltroArea(e.target.value)}
+            className="rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-slate-200 text-sm"
+          >
+            <option value="">Todas las áreas</option>
+            {CATEGORIAS.map((c) => (
+              <option key={c} value={areaLabel(c)}>{areaLabel(c)}</option>
+            ))}
+            <option value="Logística">Logística</option>
+            <option value="Almacenaje">Almacenaje</option>
+          </select>
         </div>
 
         {!loading && (gastos.length > 0 || envios.length > 0) && (
           <div className="rounded-xl bg-slate-800/40 border border-slate-700/50 p-6 flex flex-wrap gap-6">
             <div>
-              <div className="text-sm text-slate-400">Total gastos (categorías)</div>
-              <div className="text-2xl font-bold text-amber-400">{formatCurrency(totalGastos)}</div>
-            </div>
-            <div>
-              <div className="text-sm text-slate-400">Total logística y almacenaje (envíos)</div>
-              <div className="text-2xl font-bold text-blue-400">{formatCurrency(totalEnvios)}</div>
+              <div className="text-sm text-slate-400">Total (filtrado)</div>
+              <div className="text-2xl font-bold text-slate-100">{formatCurrency(totalFiltrado)}</div>
             </div>
             <div>
               <div className="text-sm text-slate-400">Total general</div>
-              <div className="text-2xl font-bold text-slate-100">{formatCurrency(totalGastos + totalEnvios)}</div>
+              <div className="text-lg text-slate-300">{formatCurrency(totalGeneral)}</div>
             </div>
           </div>
         )}
@@ -196,78 +317,46 @@ export default function GastosPage() {
                 <thead className="text-slate-400 bg-slate-800/60">
                   <tr>
                     <th className="py-3 px-4 font-medium">Fecha</th>
-                    <th className="py-3 px-4 font-medium">Categoría</th>
+                    <th className="py-3 px-4 font-medium">Área</th>
                     <th className="py-3 px-4 font-medium">Descripción</th>
                     <th className="py-3 px-4 font-medium text-right">Monto</th>
                     <th className="py-3 px-4 w-24">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
-                  {gastos.map((g) => (
-                    <tr key={g.id} className="hover:bg-slate-800/30 transition-colors">
-                      <td className="py-3 px-4 text-slate-400">{format(new Date(g.fecha + 'T12:00:00'), 'd MMM yyyy', { locale: es })}</td>
-                      <td className="py-3 px-4 font-medium text-slate-200">{g.categoria}</td>
-                      <td className="py-3 px-4 text-slate-400">{g.descripcion || '—'}</td>
-                      <td className="py-3 px-4 text-right font-mono text-amber-400">{formatCurrency(g.monto)}</td>
-                      <td className="py-3 px-4 flex gap-2">
-                        <button onClick={() => openEdit(g)} className="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white" title="Editar"><PencilIcon className="w-4 h-4" /></button>
-                        <button onClick={() => remove(g.id)} className="p-1.5 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400" title="Eliminar"><TrashIcon className="w-4 h-4" /></button>
+                  {filasFiltradas.map((f) => (
+                    <tr key={f.tipo === 'gasto' ? f.id : `envio-${f.id}`} className="hover:bg-slate-800/30 transition-colors">
+                      <td className="py-3 px-4 text-slate-400">
+                        {f.fecha ? format(new Date(f.fecha + 'T12:00:00'), 'd MMM yyyy', { locale: es }) : '—'}
+                      </td>
+                      <td className="py-3 px-4 font-medium text-slate-200">{areaLabel(f.area)}</td>
+                      <td className="py-3 px-4 text-slate-400">{f.descripcion || '—'}</td>
+                      <td className="py-3 px-4 text-right font-mono text-amber-400">{formatCurrency(f.monto)}</td>
+                      <td className="py-3 px-4">
+                        {f.editable ? (
+                          <div className="flex gap-2">
+                            <button onClick={() => openEdit(f.original)} className="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white" title="Editar"><PencilIcon className="w-4 h-4" /></button>
+                            <button onClick={() => remove(f.id)} className="p-1.5 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400" title="Eliminar"><TrashIcon className="w-4 h-4" /></button>
+                          </div>
+                        ) : (
+                          <span className="text-slate-500 text-xs">envío</span>
+                        )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            {gastos.length === 0 && (
+            {filasFiltradas.length === 0 && !loadingEnvios && (
               <div className="p-12 text-center text-slate-500">
-                No hay gastos. Haz clic en &quot;Nuevo gasto&quot; o escribe en el chat: <code className="text-amber-400">gasto flete 5000 transporte</code>
+                No hay gastos. Haz clic en &quot;Nuevo gasto&quot; o escribe en el chat: <code className="text-amber-400">gasto flete 5000 transporte</code>. Los costos de logística y almacén aparecen aquí si hay envíos registrados.
               </div>
+            )}
+            {(loading || loadingEnvios) && filasFiltradas.length === 0 && (
+              <div className="p-12 text-center text-slate-500">Cargando...</div>
             )}
           </div>
         )}
-
-        {/* Logística y almacenaje (desde envíos) */}
-        <section className="rounded-xl bg-slate-800/40 border border-slate-700/50 overflow-hidden">
-          <div className="p-4 border-b border-slate-700/50 flex items-center gap-2">
-            <TruckIcon className="h-5 w-5 text-blue-400" />
-            <h2 className="text-lg font-semibold text-slate-200">Logística y almacenaje (envíos)</h2>
-          </div>
-          {loadingEnvios && <div className="p-6 text-center text-slate-500">Cargando envíos...</div>}
-          {!loadingEnvios && envios.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-slate-400 bg-slate-800/60">
-                  <tr>
-                    <th className="py-3 px-4 font-medium">ID</th>
-                    <th className="py-3 px-4 font-medium">Producto</th>
-                    <th className="py-3 px-4 font-medium">Tipo</th>
-                    <th className="py-3 px-4 font-medium">Origen → Destino</th>
-                    <th className="py-3 px-4 font-medium text-right">Costo</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-700/50">
-                  {envios.map((e) => (
-                    <tr key={e.id_envio} className="hover:bg-slate-800/30">
-                      <td className="py-3 px-4 font-mono text-slate-300">{e.id_envio}</td>
-                      <td className="py-3 px-4 text-slate-300">{e.producto || '—'}</td>
-                      <td className="py-3 px-4 text-slate-400">{tipoLabel(e.tipo_envio)}</td>
-                      <td className="py-3 px-4 text-slate-400">{e.origen || '—'} → {e.destino || '—'}</td>
-                      <td className="py-3 px-4 text-right font-mono text-blue-400">{formatCurrency(e.costo_envio ?? 0)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="p-3 border-t border-slate-700/50 text-right text-slate-300 font-medium">
-                Subtotal envíos: {formatCurrency(totalEnvios)}
-              </div>
-            </div>
-          )}
-          {!loadingEnvios && envios.length === 0 && (
-            <div className="p-8 text-center text-slate-500 text-sm">
-              No hay envíos. Los costos de logística y almacenaje se registran en la tabla <strong>envíos</strong> (p. ej. en Contenedores o vía migración).
-            </div>
-          )}
-        </section>
       </div>
 
       {modal !== 'cerrado' && (
@@ -275,10 +364,10 @@ export default function GastosPage() {
           <div className="bg-slate-800 rounded-xl border border-slate-700 max-w-md w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-xl font-bold text-slate-100 mb-4">{modal === 'nuevo' ? 'Nuevo gasto' : 'Editar gasto'}</h2>
             <div className="space-y-3">
-              <label className="block text-sm text-slate-400">Categoría</label>
+              <label className="block text-sm text-slate-400">Área (tipo de gasto)</label>
               <select value={form.categoria} onChange={(e) => setForm((f) => ({ ...f, categoria: e.target.value }))} className="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-slate-200">
                 {CATEGORIAS.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
+                  <option key={cat} value={cat}>{areaLabel(cat)}</option>
                 ))}
               </select>
               <label className="block text-sm text-slate-400">Monto *</label>

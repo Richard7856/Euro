@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useCurrency } from '@/lib/currencyContext';
 import { CuentaPorCobrar } from '@/types/financial';
 import { Pedido } from '@/types/financial';
 import { Envio } from '@/types/financial';
@@ -17,14 +18,7 @@ export default function VentasCxCCliente({ cuentas, pedidos, envios, gastos }: V
   const [filtroPedido, setFiltroPedido] = useState<string>('');
   const [clienteExpandido, setClienteExpandido] = useState<string | null>(null);
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
-  };
+  const { formatCurrency } = useCurrency();
 
   const pedidosUnicos = pedidos.filter(p => p.id_pedido).map(p => p.id_pedido);
   const pedidosIds = Array.from(new Set(pedidosUnicos));

@@ -2,21 +2,19 @@
 
 import { KPI } from '@/types/financial';
 import { ArrowUpIcon, ArrowDownIcon, MinusIcon } from '@heroicons/react/24/solid';
+import { useCurrency } from '@/lib/currencyContext';
 
 interface KPICardProps {
     kpi: KPI;
 }
 
 export default function KPICard({ kpi }: KPICardProps) {
+    const { formatCurrency } = useCurrency();
+
     const formatValue = () => {
         switch (kpi.format) {
             case 'currency':
-                return new Intl.NumberFormat('es-MX', {
-                    style: 'currency',
-                    currency: 'MXN',
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 0
-                }).format(kpi.value);
+                return formatCurrency(kpi.value);
             case 'percentage':
                 return `${kpi.value.toFixed(2)}%`;
             case 'number':

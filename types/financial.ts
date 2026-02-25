@@ -214,3 +214,83 @@ export interface CashPositionKPIs {
   runway_meses: KPI;
 }
 
+// Bodegas e inventario por bodega
+export interface Bodega {
+  id: string;
+  nombre: string;
+  codigo: string | null;
+  direccion: string | null;
+  activo: boolean;
+  empresa_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InventarioBodega {
+  id: string;
+  bodega_id: string;
+  id_producto: string;
+  cantidad: number;
+  valor_unitario_promedio: number;
+  updated_at: string;
+  nombre_producto?: string; // join con productos
+  nombre_bodega?: string;   // join con bodegas
+}
+
+export type TipoMovimiento = 'entrada' | 'salida' | 'ajuste' | 'traslado';
+export type ReferenciaMovimiento = 'compra' | 'venta' | 'ajuste' | 'traslado' | 'inicial' | 'manual';
+
+export interface MovimientoInventario {
+  id: string;
+  bodega_id: string;
+  id_producto: string;
+  tipo: TipoMovimiento;
+  cantidad: number;
+  unidad: string;
+  referencia_tipo: ReferenciaMovimiento | null;
+  referencia_id: string | null;
+  observaciones: string | null;
+  usuario_id: string | null;
+  empresa_id: string | null;
+  created_at: string;
+  nombre_bodega?: string;
+  nombre_producto?: string;
+}
+
+// Precios proveedores y precio de venta final
+export type FuentePrecio = 'manual' | 'importacion' | 'api' | 'email' | 'whatsapp';
+
+export interface PrecioProveedor {
+  id: string;
+  id_proveedor: string;
+  nombre_proveedor: string | null;
+  id_producto: string | null;
+  concepto: string | null;
+  precio: number;
+  moneda: string;
+  unidad: string;
+  fecha: string;
+  vigente_desde: string | null;
+  vigente_hasta: string | null;
+  fuente: FuentePrecio;
+  referencia: string | null;
+  observaciones: string | null;
+  empresa_id: string | null;
+  created_at: string;
+}
+
+export interface PrecioVenta {
+  id: string;
+  id_producto: string;
+  nombre_producto: string | null;
+  precio_venta: number;
+  moneda: string;
+  unidad: string;
+  vigente_desde: string;
+  vigente_hasta: string | null;
+  origen: string;
+  empresa_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+

@@ -37,6 +37,7 @@ import {
   DocumentTextIcon as DocumentTextIconSolid,
 } from '@heroicons/react/24/solid';
 import LogoutButton from './LogoutButton';
+import CurrencyToggle from './CurrencyToggle';
 import { useProfileOptional } from '@/lib/profileContext';
 import { useEmpresaOptional } from '@/lib/empresaContext';
 import { EMPRESAS, EMPRESA_THEMES, type EmpresaSlug } from '@/lib/empresaContext';
@@ -200,6 +201,10 @@ export default function DashboardNav() {
       </nav>
 
       <div className="p-3 border-t border-zinc-800/80 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-zinc-500">Moneda</span>
+          <CurrencyToggle />
+        </div>
         {profile && (
           <div className="rounded-lg bg-zinc-800/50 px-3 py-2 border border-zinc-700/50">
             <p className="text-zinc-300 text-sm truncate" title={profile.email ?? undefined}>

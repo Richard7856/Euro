@@ -1,5 +1,6 @@
 'use client';
 
+import { useCurrency } from '@/lib/currencyContext';
 import { PagoProveedor } from '@/types/financial';
 import { Compra } from '@/types/financial';
 import { parseISO, differenceInDays } from 'date-fns';
@@ -10,14 +11,7 @@ interface PagosPanelProps {
 }
 
 export default function PagosPanel({ pagos, compras }: PagosPanelProps) {
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
-  };
+  const { formatCurrency } = useCurrency();
 
   const getCompraByID = (id: string) => compras.find(c => c.id_compra === id);
 

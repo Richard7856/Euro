@@ -24,9 +24,28 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user: { id: string } | null = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch (err) {
+    const isRefreshTokenError =
+      err && typeof err === 'object' && 'code' in err &&
+      (err.code === 'refresh_token_not_found' || (err as { status?: number }).status === 400);
+    if (isRefreshTokenError) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/login';
+      url.searchParams.set('redirect', request.nextUrl.pathname);
+      const res = NextResponse.redirect(url);
+      request.cookies.getAll().forEach((c) => {
+        if (c.name.startsWith('sb-') && c.name.endsWith('-auth-token')) {
+          res.cookies.set(c.name, '', { maxAge: 0, path: '/' });
+        }
+      });
+      return res;
+    }
+    throw err;
+  }
 
   const isLoginPage = request.nextUrl.pathname === '/login';
   const isConfigurar2FA = request.nextUrl.pathname === '/configurar-2fa';

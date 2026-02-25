@@ -32,15 +32,23 @@ function LoginContent() {
   useEffect(() => {
     if (!supabase) return;
     const checkSession = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-        if (aalData?.currentLevel === 'aal2' || aalData?.nextLevel === 'aal1') {
-          router.push(redirect);
-        } else if (aalData?.nextLevel === 'aal2') {
-          setStep('mfa');
-        } else {
-          router.push(redirect);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+          if (aalData?.currentLevel === 'aal2' || aalData?.nextLevel === 'aal1') {
+            router.push(redirect);
+          } else if (aalData?.nextLevel === 'aal2') {
+            setStep('mfa');
+          } else {
+            router.push(redirect);
+          }
+        }
+      } catch {
+        try {
+          await supabase.auth.signOut({ scope: 'local' });
+        } catch {
+          // Ignorar si falla limpiar sesión local
         }
       }
     };

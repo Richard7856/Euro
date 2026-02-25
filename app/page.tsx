@@ -10,8 +10,11 @@ import {
   CalendarDaysIcon,
   ChartBarIcon,
   ArrowRightIcon,
+  BuildingStorefrontIcon,
+  BanknotesIcon,
 } from '@heroicons/react/24/outline';
 import { useEmpresaOptional } from '@/lib/empresaContext';
+import { useCurrency } from '@/lib/currencyContext';
 import { CashFlowAnalyzer } from '@/lib/cashFlowAnalyzer';
 import { ventasData, pedidosData, enviosData } from '@/lib/sampleData';
 import { gastosDetallados, comprasData, inventarioData, cuentasPorCobrar } from '@/lib/cashFlowData';
@@ -41,14 +44,14 @@ function filterByDateRange<T>(items: T[], getDate: (item: T) => string | undefin
   });
 }
 
-const formatCurrency = (n: number) =>
-  new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(n);
 
 const modules = [
   { href: '/financiero', label: 'Financiero', desc: 'Efectivo, CxC, CxP, ventas, compras y análisis', Icon: CurrencyDollarIcon },
   { href: '/mercancia', label: 'Mercancía y almacenes', desc: 'Ubicación de mercancía por almacén', Icon: CubeIcon },
+  { href: '/bodegas', label: 'Bodegas', desc: 'Inventario por bodega, entradas y salidas', Icon: BuildingStorefrontIcon },
   { href: '/clientes', label: 'Clientes y crédito', desc: 'Clientes, crédito y cobranza', Icon: UserGroupIcon },
   { href: '/contenedores', label: 'Contenedores', desc: 'Seguimiento de contenedores en tránsito', Icon: TruckIcon },
+  { href: '/precios', label: 'Precios proveedores', desc: 'Precios recibidos de proveedores y precios de venta final', Icon: BanknotesIcon },
   { href: '/promesas', label: 'Promesas de pago', desc: 'Promesas de proveedores y clientes', Icon: CalendarDaysIcon },
   { href: '/dinamico', label: 'Datos en vivo', desc: 'Dashboard conectado a Supabase', Icon: ChartBarIcon },
 ];
@@ -65,6 +68,7 @@ export default function InicioPage() {
   const empresaContext = useEmpresaOptional();
   const empresaInfo = empresaContext?.empresaInfo ?? { name: 'Euromex', subtitle: 'Import/Export', slug: 'euromex' as const };
   const isEuromex = empresaContext?.empresa === 'euromex';
+  const { formatCurrency } = useCurrency();
 
   const ventasFiltradas = useMemo(
     () => (isEuromex ? filterByDateRange(ventasData, (v) => (v as Venta).fecha_pago, filtroFecha) : EMPTY_VENTAS),
