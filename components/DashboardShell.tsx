@@ -23,12 +23,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
   return (
     <div
-      className="flex min-h-screen"
+      className="flex h-screen overflow-hidden"
       style={{ backgroundColor: shellBg }}
       {...(empresaSlug ? { 'data-empresa': empresaSlug } : {})}
     >
       <DashboardNav />
-      <main className="flex-1 overflow-auto min-w-0" {...(empresaSlug ? { 'data-empresa': empresaSlug } : {})}>
+      <main className="flex-1 overflow-auto min-w-0 min-h-0" {...(empresaSlug ? { 'data-empresa': empresaSlug } : {})}>
         {children}
       </main>
       <ChatRegistro />

@@ -52,6 +52,14 @@ body {
   background-color: var(--shell-bg);
 }
 
+/* Sidebar: tamaño de fuente fijo para que en producción no se vea gigante */
+.dashboard-sidebar {
+  font-size: 0.875rem;
+}
+.dashboard-sidebar .text-xs {
+  font-size: 0.75rem;
+}
+
 .glass-card {
   background: var(--card-bg);
   backdrop-filter: blur(24px);

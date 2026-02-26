@@ -101,8 +101,8 @@ export default function DashboardNav() {
       : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200';
 
   return (
-    <aside className="w-56 shrink-0 flex flex-col border-r border-zinc-800/80 min-h-screen" style={{ backgroundColor: 'var(--sidebar-bg)' }}>
-      <div className="p-3 border-b border-zinc-800/80" ref={selectorRef}>
+    <aside className="dashboard-sidebar w-56 shrink-0 flex flex-col h-full border-r border-zinc-800/80 overflow-hidden" style={{ backgroundColor: 'var(--sidebar-bg)' }}>
+      <div className="p-3 border-b border-zinc-800/80 shrink-0" ref={selectorRef}>
         {setEmpresa ? (
           <div className="relative">
             <button
@@ -113,7 +113,7 @@ export default function DashboardNav() {
               aria-haspopup="listbox"
               aria-label="Cambiar empresa"
             >
-              <span className={`text-sm font-bold bg-gradient-to-r ${theme.logoGradient} bg-clip-text text-transparent truncate`}>
+              <span className={`font-bold bg-gradient-to-r ${theme.logoGradient} bg-clip-text text-transparent truncate`}>
                 {empresaInfo.name}
               </span>
               <ChevronDownIcon className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${selectorOpen ? 'rotate-180' : ''}`} />
@@ -158,7 +158,7 @@ export default function DashboardNav() {
         )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
+      <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-0.5">
         {visibleItems.map(({ href, label, Icon, IconActive }) => {
           const isActive = pathname === href || (href !== '/' && pathname.startsWith(href));
           const IconC = isActive ? IconActive : Icon;
@@ -166,7 +166,7 @@ export default function DashboardNav() {
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${navLink(isActive)}`}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 font-medium transition-colors ${navLink(isActive)}`}
             >
               <IconC className="h-5 w-5 shrink-0" />
               <span>{label}</span>
@@ -201,7 +201,7 @@ export default function DashboardNav() {
         )}
       </nav>
 
-      <div className="p-3 border-t border-zinc-800/80 space-y-2">
+      <div className="p-3 border-t border-zinc-800/80 space-y-2 shrink-0">
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs text-zinc-500">Moneda</span>
           <CurrencyToggle />
