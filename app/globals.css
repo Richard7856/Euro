@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Base más pequeña para que en Chrome/producción no se vea todo tan grande */
+html {
+  font-size: 14px;
+}
+
 /* Euromex (default) */
 :root,
 [data-empresa="euromex"] {

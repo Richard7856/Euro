@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { CubeIcon, ArrowLeftIcon, ChartBarIcon, BuildingStorefrontIcon, FunnelIcon } from '@heroicons/react/24/outline';
+import { CubeIcon, ArrowLeftIcon, ChartBarIcon, BuildingStorefrontIcon, FunnelIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
 import { useCurrency } from '@/lib/currencyContext';
 import ExportButtons from '@/components/ExportButtons';
 import { useEmpresaOptional } from '@/lib/empresaContext';
@@ -21,7 +21,19 @@ export default function MercanciaPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtroTexto, setFiltroTexto] = useState('');
+  const [editingProducto, setEditingProducto] = useState<Producto | null>(null);
+  const [editForm, setEditForm] = useState({ nombre_producto: '', cantidad_disponible: '', valor_unitario_promedio: '', valor_total: '' });
+  const [saving, setSaving] = useState(false);
   const { formatCurrency } = useCurrency();
+
+  const fetchInventario = useCallback(() => {
+    setLoading(true);
+    fetch('/api/datos', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Error al cargar'))))
+      .then((d) => setInventario(d.inventario ?? []))
+      .catch((e) => setError(e instanceof Error ? e.message : 'Error'))
+      .finally(() => setLoading(false));
+  }, [empresa]);
 
   const inventarioFiltrado = useMemo(() => {
     if (!filtroTexto.trim()) return inventario;
@@ -34,12 +46,49 @@ export default function MercanciaPage() {
   }, [inventario, filtroTexto]);
 
   useEffect(() => {
-    fetch('/api/datos', { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Error al cargar'))))
-      .then((d) => setInventario(d.inventario ?? []))
-      .catch((e) => setError(e instanceof Error ? e.message : 'Error'))
-      .finally(() => setLoading(false));
-  }, [empresa]);
+    fetchInventario();
+  }, [fetchInventario]);
+
+  const openEdit = (p: Producto) => {
+    setError(null);
+    setEditingProducto(p);
+    setEditForm({
+      nombre_producto: p.nombre_producto ?? '',
+      cantidad_disponible: String(p.cantidad_disponible ?? ''),
+      valor_unitario_promedio: p.valor_unitario_promedio != null ? String(p.valor_unitario_promedio) : '',
+      valor_total: p.valor_total != null ? String(p.valor_total) : '',
+    });
+  };
+
+  const guardarEdicion = async () => {
+    if (!editingProducto) return;
+    const cantidad = parseFloat(editForm.cantidad_disponible.replace(/[^0-9.-]/g, '')) ?? 0;
+    const num = (s: string) => (s.trim() === '' ? null : parseFloat(s.replace(/[^0-9.-]/g, '')) ?? null);
+    const valorUnit = num(editForm.valor_unitario_promedio);
+    const valorTotal = num(editForm.valor_total);
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/productos?id_producto=${encodeURIComponent(editingProducto.id_producto)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          nombre_producto: editForm.nombre_producto.trim() || undefined,
+          cantidad_disponible: cantidad,
+          valor_unitario_promedio: valorUnit,
+          valor_total: valorTotal,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Error al guardar');
+      setEditingProducto(null);
+      fetchInventario();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al guardar');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const totalValor = inventarioFiltrado.reduce((s, p) => s + (p.valor_total ?? 0), 0);
   const exportColumns = [
@@ -118,6 +167,7 @@ export default function MercanciaPage() {
                     <th className="py-3 px-4 font-medium text-right">Cantidad</th>
                     <th className="py-3 px-4 font-medium text-right">Valor unit.</th>
                     <th className="py-3 px-4 font-medium text-right">Valor total</th>
+                    <th className="py-3 px-4 font-medium w-24">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
@@ -128,6 +178,16 @@ export default function MercanciaPage() {
                       <td className="py-3 px-4 text-right text-slate-300">{p.cantidad_disponible ?? 0}</td>
                       <td className="py-3 px-4 text-right font-mono text-slate-400">{formatCurrency(p.valor_unitario_promedio ?? 0)}</td>
                       <td className="py-3 px-4 text-right font-mono text-blue-400">{formatCurrency(p.valor_total ?? 0)}</td>
+                      <td className="py-3 px-4">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(p)}
+                          className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition-colors"
+                          title="Editar"
+                        >
+                          <PencilSquareIcon className="w-5 h-5" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -138,6 +198,67 @@ export default function MercanciaPage() {
                 No hay productos en inventario. Registra productos en la base de datos o ejecuta la migración desde Sheets (admin).
               </div>
             )}
+          </div>
+        )}
+
+        {editingProducto && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" role="dialog" aria-modal="true" aria-labelledby="modal-editar-title">
+            <div className="bg-slate-800 rounded-xl border border-slate-600 max-w-md w-full p-6 shadow-xl">
+              <h2 id="modal-editar-title" className="text-lg font-semibold text-slate-100 mb-4">
+                Editar producto · {editingProducto.id_producto}
+              </h2>
+              <div className="space-y-3">
+                <label className="block text-sm text-slate-400">Nombre</label>
+                <input
+                  type="text"
+                  value={editForm.nombre_producto}
+                  onChange={(e) => setEditForm((f) => ({ ...f, nombre_producto: e.target.value }))}
+                  className="w-full rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-slate-200"
+                />
+                <label className="block text-sm text-slate-400">Cantidad disponible</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={editForm.cantidad_disponible}
+                  onChange={(e) => setEditForm((f) => ({ ...f, cantidad_disponible: e.target.value }))}
+                  className="w-full rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-slate-200"
+                />
+                <label className="block text-sm text-slate-400">Valor unitario promedio</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={editForm.valor_unitario_promedio}
+                  onChange={(e) => setEditForm((f) => ({ ...f, valor_unitario_promedio: e.target.value }))}
+                  className="w-full rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-slate-200"
+                />
+                <label className="block text-sm text-slate-400">Valor total</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={editForm.valor_total}
+                  onChange={(e) => setEditForm((f) => ({ ...f, valor_total: e.target.value }))}
+                  className="w-full rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-slate-200"
+                />
+              </div>
+              <div className="flex gap-2 mt-6">
+                <button
+                  type="button"
+                  onClick={guardarEdicion}
+                  disabled={saving}
+                  className="flex-1 py-2 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  {saving ? 'Guardando…' : 'Guardar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingProducto(null)}
+                  disabled={saving}
+                  className="px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
