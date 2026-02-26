@@ -55,8 +55,9 @@ export async function middleware(request: NextRequest) {
   const isLoginPage = request.nextUrl.pathname === '/login';
   const isConfigurar2FA = request.nextUrl.pathname === '/configurar-2fa';
   const isPublicApi = request.nextUrl.pathname === '/api/supabase-health';
+  const isBotApi = request.nextUrl.pathname.startsWith('/api/bot/');
 
-  if (!user && !isLoginPage && !isConfigurar2FA && !isPublicApi) {
+  if (!user && !isLoginPage && !isConfigurar2FA && !isPublicApi && !isBotApi) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('redirect', request.nextUrl.pathname);
