@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeftIcon, UserGroupIcon, PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, UserGroupIcon, PlusIcon, PencilIcon, TrashIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
+import ImportModal, { type ImportField } from '@/components/ImportModal';
 
 type Cliente = {
   id: string;
@@ -17,8 +18,59 @@ type Cliente = {
   estado: string | null;
   pais: string | null;
   canal_principal: string | null;
+  condiciones_cobro: string | null;
+  notas: string | null;
   limite_credito: number | null;
   created_at: string;
+};
+
+/** Campos que el ImportModal mostrará en preview y en los chips de ayuda */
+const CLIENTES_FIELDS: ImportField[] = [
+  { key: 'id_cliente',        label: 'ID_Cliente',        required: true },
+  { key: 'nombre_cliente',    label: 'Nombre_Cliente',    required: true },
+  { key: 'rfc_taxid',         label: 'RFC/TaxID' },
+  { key: 'contacto',          label: 'Contacto' },
+  { key: 'telefono',          label: 'Teléfono' },
+  { key: 'email',             label: 'Email' },
+  { key: 'direccion',         label: 'Dirección' },
+  { key: 'ciudad',            label: 'Ciudad' },
+  { key: 'estado',            label: 'Estado' },
+  { key: 'pais',              label: 'País' },
+  { key: 'canal_principal',   label: 'Canal_Principal' },
+  { key: 'condiciones_cobro', label: 'Condiciones_Cobro' },
+  { key: 'notas',             label: 'Notas' },
+];
+
+/**
+ * Mapa de encabezados CSV (en minúsculas / normalizados) → nombre de columna en DB.
+ * El ImportModal normaliza los headers del archivo quitando acentos y separadores antes
+ * de buscar aquí, así que se cubren variantes como "Teléfono", "telefono", "TELÉFONO".
+ */
+const CLIENTES_COLUMN_MAP: Record<string, string> = {
+  // — normalised (sin acentos ni separadores) —
+  idcliente:          'id_cliente',
+  nombrecliente:      'nombre_cliente',
+  rfctaxid:           'rfc_taxid',
+  contacto:           'contacto',
+  telefono:           'telefono',
+  email:              'email',
+  direccion:          'direccion',
+  ciudad:             'ciudad',
+  estado:             'estado',
+  pais:               'pais',
+  canalprincipal:     'canal_principal',
+  condicionescobro:   'condiciones_cobro',
+  notas:              'notas',
+  // — raw lowercase (fallback) —
+  'id_cliente':        'id_cliente',
+  'nombre_cliente':    'nombre_cliente',
+  'rfc_taxid':         'rfc_taxid',
+  'rfc/taxid':         'rfc_taxid',
+  'teléfono':          'telefono',
+  'dirección':         'direccion',
+  'país':              'pais',
+  'canal_principal':   'canal_principal',
+  'condiciones_cobro': 'condiciones_cobro',
 };
 
 const formatMXN = (n: number) =>
@@ -47,6 +99,7 @@ export default function ClientesPage() {
     limite_credito: '',
   });
   const [saving, setSaving] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   const fetchClientes = useCallback(() => {
     setLoading(true);
@@ -146,9 +199,17 @@ export default function ClientesPage() {
               <p className="text-slate-400">Catálogo de clientes. Alta, edición y eliminación.</p>
             </div>
           </div>
-          <button onClick={openNew} className="btn-primary flex items-center gap-2">
-            <PlusIcon className="w-5 h-5" /> Nuevo cliente
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowImport(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700/80 hover:bg-slate-600 text-slate-200 text-sm border border-slate-600 transition-colors"
+            >
+              <ArrowUpTrayIcon className="w-4 h-4" /> Importar CSV / XLSX
+            </button>
+            <button onClick={openNew} className="btn-primary flex items-center gap-2">
+              <PlusIcon className="w-5 h-5" /> Nuevo cliente
+            </button>
+          </div>
         </div>
 
         {loading && <div className="text-center text-slate-500 py-12">Cargando...</div>}
@@ -199,6 +260,21 @@ export default function ClientesPage() {
           </div>
         )}
       </div>
+
+      {showImport && (
+        <ImportModal
+          title="Clientes"
+          fields={CLIENTES_FIELDS}
+          columnMap={CLIENTES_COLUMN_MAP}
+          apiEndpoint="/api/import/clientes"
+          onClose={() => setShowImport(false)}
+          onSuccess={(count) => {
+            setShowImport(false);
+            fetchClientes();
+            alert(`✅ ${count} cliente${count === 1 ? '' : 's'} importado${count === 1 ? '' : 's'} correctamente.`);
+          }}
+        />
+      )}
 
       {modal !== 'cerrado' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => !saving && setModal('cerrado')}>
