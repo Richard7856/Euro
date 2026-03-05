@@ -100,6 +100,35 @@ export async function POST(req: Request) {
   }
 }
 
+export async function PATCH(req: Request) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+    if (!id) return NextResponse.json({ error: 'Falta id' }, { status: 400 });
+
+    const body = await req.json();
+    const str = (v: unknown) => (v != null && String(v).trim() !== '' ? String(v).trim() : null);
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    const fields = ['nombre_cliente', 'rfc_taxid', 'contacto', 'telefono', 'email', 'direccion', 'ciudad', 'estado', 'pais', 'canal_principal'];
+    for (const f of fields) { if (body[f] !== undefined) updates[f] = str(body[f]); }
+    if (body.limite_credito !== undefined) {
+      const val = body.limite_credito === null || body.limite_credito === '' ? null : parseFloat(String(body.limite_credito).replace(/[^0-9.-]/g, ''));
+      updates.limite_credito = val != null && !isNaN(val) ? val : null;
+    }
+
+    const { data: row, error } = await supabase.from('clientes').update(updates).eq('id', id).select().single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, cliente: row });
+  } catch (err) {
+    console.error('API clientes PATCH:', err);
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Error al actualizar' }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: Request) {
   try {
     const supabase = await createClient();

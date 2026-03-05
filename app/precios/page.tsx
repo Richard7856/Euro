@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeftIcon,
@@ -10,7 +10,18 @@ import {
   TrashIcon,
   FunnelIcon,
   DocumentChartBarIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/outline';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { PrecioProveedor } from '@/types/financial';
@@ -40,6 +51,7 @@ export default function PreciosProveedorPage() {
   const [filtroProducto, setFiltroProducto] = useState('');
   const [filtroFechaDesde, setFiltroFechaDesde] = useState('');
   const [filtroFechaHasta, setFiltroFechaHasta] = useState('');
+  const [verGrafica, setVerGrafica] = useState(false);
   const [modal, setModal] = useState<'cerrado' | 'nuevo' | 'editar'>('cerrado');
   const [editing, setEditing] = useState<PrecioProveedor | null>(null);
   const [saving, setSaving] = useState(false);
@@ -210,6 +222,26 @@ export default function PreciosProveedorPage() {
   };
 
   const toMxn = (n: number, moneda: string) => (moneda && String(moneda).toUpperCase() === 'USD' ? n * USD_TO_MXN : n);
+
+  const CHART_COLORS = ['#f59e0b', '#60a5fa', '#34d399', '#f87171', '#a78bfa', '#fb923c', '#38bdf8'];
+
+  const { chartData, chartProveedores } = useMemo(() => {
+    const conFecha = precios.filter((p) => p.fecha && p.precio != null);
+    if (conFecha.length === 0) return { chartData: [], chartProveedores: [] };
+    const fechas = [...new Set(conFecha.map((p) => (p.fecha ?? '').slice(0, 10)))].sort();
+    const provs = [...new Set(conFecha.map((p) => p.nombre_proveedor || p.id_proveedor))];
+    const data = fechas.map((fecha) => {
+      const point: Record<string, number | string> = { fecha };
+      for (const prov of provs) {
+        const match = conFecha.find(
+          (p) => (p.nombre_proveedor || p.id_proveedor) === prov && (p.fecha ?? '').slice(0, 10) === fecha
+        );
+        if (match) point[prov] = Math.round(toMxn(match.precio, match.moneda) * 100) / 100;
+      }
+      return point;
+    });
+    return { chartData: data, chartProveedores: provs };
+  }, [precios]);
   const formatMoney = (n: number, moneda: string, rate?: number) => formatCurrency(toMxn(n, moneda), { maxFraction: 2, rate });
   const productoConcepto = (p: PrecioProveedor) => p.id_producto || p.concepto || '—';
 
@@ -248,6 +280,12 @@ export default function PreciosProveedorPage() {
           </div>
           <div className="flex gap-2 items-center flex-wrap">
             <ExportButtons title="Precios proveedores" columns={exportColumns} rows={exportRows} filenameBase="precios-proveedor" />
+            <button
+              onClick={() => setVerGrafica((v) => !v)}
+              className={`btn-secondary flex items-center gap-2 ${verGrafica ? 'ring-1 ring-amber-400' : ''}`}
+            >
+              <ChartBarIcon className="w-5 h-5" /> {verGrafica ? 'Ocultar gráfica' : 'Ver gráfica'}
+            </button>
             <Link href="/precios-venta" className="btn-secondary flex items-center gap-2">
               <DocumentChartBarIcon className="w-5 h-5" /> Precios de venta
             </Link>
@@ -318,6 +356,61 @@ export default function PreciosProveedorPage() {
 
         {error && <div className="rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 p-4">{error}</div>}
         {loading && <div className="text-slate-500 py-8 text-center">Cargando...</div>}
+
+        {verGrafica && !loading && (
+          <div className="rounded-xl bg-slate-800/40 border border-slate-700/50 p-4">
+            <h3 className="text-sm font-semibold text-slate-300 mb-4">
+              Comparativo de precios por proveedor
+              {filtroProducto && <span className="text-amber-400 ml-2">· {productos.find((p) => p.id_producto === filtroProducto)?.nombre_producto ?? filtroProducto}</span>}
+              <span className="text-slate-500 ml-2 font-normal text-xs">(MXN)</span>
+            </h3>
+            {chartData.length < 2 ? (
+              <div className="text-center text-slate-500 py-8 text-sm">
+                Necesitas al menos 2 fechas distintas con precios para ver la gráfica. Filtra por producto o amplía el rango de fechas.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={chartData} margin={{ top: 4, right: 20, left: 10, bottom: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis
+                    dataKey="fecha"
+                    tick={{ fill: '#94a3b8', fontSize: 11 }}
+                    tickFormatter={(v) => {
+                      try { return new Date(v + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }); } catch { return v; }
+                    }}
+                  />
+                  <YAxis
+                    tick={{ fill: '#94a3b8', fontSize: 11 }}
+                    tickFormatter={(v) => `$${Number(v).toLocaleString('es-MX', { minimumFractionDigits: 0 })}`}
+                    width={80}
+                  />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
+                    labelStyle={{ color: '#94a3b8', fontSize: 12 }}
+                    itemStyle={{ fontSize: 12 }}
+                    formatter={(value: number) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, '']}
+                    labelFormatter={(label) => {
+                      try { return new Date(label + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' }); } catch { return label; }
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
+                  {chartProveedores.map((prov, i) => (
+                    <Line
+                      key={prov}
+                      type="monotone"
+                      dataKey={prov}
+                      stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                      connectNulls
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        )}
 
         {!loading && (
           <div className="rounded-xl bg-slate-800/40 border border-slate-700/50 overflow-hidden">

@@ -93,3 +93,27 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Error al guardar cotización' }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+    if (!id) return NextResponse.json({ error: 'Falta id' }, { status: 400 });
+
+    const { error } = await supabase
+      .from('cotizaciones')
+      .delete()
+      .eq('id', id)
+      .eq('empresa_id', EUROMEX_ID);
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error('API cotizaciones DELETE:', err);
+    return NextResponse.json({ error: 'Error al eliminar cotización' }, { status: 500 });
+  }
+}

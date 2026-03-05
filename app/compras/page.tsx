@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeftIcon, ShoppingCartIcon, PlusIcon, PencilIcon, TrashIcon, TruckIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, ShoppingCartIcon, PlusIcon, PencilIcon, TrashIcon, TruckIcon, BanknotesIcon } from '@heroicons/react/24/outline';
+import ExportButtons from '@/components/ExportButtons';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useCurrency } from '@/lib/currencyContext';
@@ -62,6 +63,9 @@ export default function ComprasPage() {
   });
   const [saving, setSaving] = useState(false);
   const [envios, setEnvios] = useState<Envio[]>([]);
+  const [pagoModal, setPagoModal] = useState<Compra | null>(null);
+  const [pagoForm, setPagoForm] = useState({ monto_pago: '', fecha_pago: new Date().toISOString().slice(0, 10), metodo_pago: 'transferencia', referencia: '' });
+  const [savingPago, setSavingPago] = useState(false);
 
   const fetchCompras = useCallback(() => {
     setLoading(true);
@@ -170,6 +174,33 @@ export default function ComprasPage() {
     }
   };
 
+  const openPago = (c: Compra) => {
+    setPagoForm({ monto_pago: String(c.pendiente_mxn ?? ''), fecha_pago: new Date().toISOString().slice(0, 10), metodo_pago: 'transferencia', referencia: '' });
+    setPagoModal(c);
+  };
+
+  const savePago = async () => {
+    if (!pagoModal) return;
+    const monto = parseFloat(pagoForm.monto_pago.replace(/[^0-9.-]/g, ''));
+    if (!monto || monto <= 0) { alert('Ingresa un monto válido'); return; }
+    setSavingPago(true);
+    try {
+      const res = await fetch('/api/pagos-compra', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ id_compra: pagoModal.id_compra, monto_pago: monto, fecha_pago: pagoForm.fecha_pago, metodo_pago: pagoForm.metodo_pago, referencia: pagoForm.referencia || null }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      setPagoModal(null);
+      fetchCompras();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Error al registrar pago');
+    } finally {
+      setSavingPago(false);
+    }
+  };
+
   const remove = async (compra: Compra) => {
     if (!confirm('¿Eliminar esta compra?')) return;
     try {
@@ -201,9 +232,39 @@ export default function ComprasPage() {
               <p className="text-slate-400">Registra y edita compras a proveedores.</p>
             </div>
           </div>
-          <button onClick={openNew} className="btn-primary flex items-center gap-2">
-            <PlusIcon className="w-5 h-5" /> Nueva compra
-          </button>
+          <div className="flex gap-2 items-center flex-wrap">
+            <ExportButtons
+              title="Compras"
+              columns={[
+                { key: 'id_compra', label: 'ID Compra' },
+                { key: 'producto_nombre', label: 'Producto' },
+                { key: 'id_proveedor', label: 'Proveedor' },
+                { key: 'fecha_compra', label: 'Fecha' },
+                { key: 'tipo_compra', label: 'Tipo' },
+                { key: 'cantidad_compra', label: 'Cantidad' },
+                { key: 'costo_unitario', label: 'Costo unit.' },
+                { key: 'subtotal', label: 'Subtotal' },
+                { key: 'estado_pago', label: 'Estado' },
+                { key: 'pendiente_mxn', label: 'Pendiente MXN' },
+              ]}
+              rows={compras.map((c) => ({
+                id_compra: c.id_compra,
+                producto_nombre: c.producto_nombre ?? '',
+                id_proveedor: c.id_proveedor ?? '',
+                fecha_compra: c.fecha_compra ?? '',
+                tipo_compra: c.tipo_compra ?? '',
+                cantidad_compra: c.cantidad_compra ?? 0,
+                costo_unitario: c.costo_unitario ?? 0,
+                subtotal: c.subtotal ?? 0,
+                estado_pago: c.estado_pago ?? '',
+                pendiente_mxn: c.pendiente_mxn ?? 0,
+              }))}
+              filenameBase="compras"
+            />
+            <button onClick={openNew} className="btn-primary flex items-center gap-2">
+              <PlusIcon className="w-5 h-5" /> Nueva compra
+            </button>
+          </div>
         </div>
 
         {loading && <div className="text-center text-slate-500 py-12">Cargando...</div>}
@@ -234,6 +295,9 @@ export default function ComprasPage() {
                       <td className="py-3 px-4 text-right font-mono text-red-400">{formatCurrency(c.pendiente_mxn ?? 0, { rate: c.tipo_cambio_usd })}</td>
                       <td className="py-3 px-4 text-slate-400">{c.estado_pago ?? '—'}</td>
                       <td className="py-3 px-4 flex gap-2">
+                        {(c.pendiente_mxn ?? 0) > 0 && (
+                          <button onClick={() => openPago(c)} className="p-1.5 rounded hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400" title="Registrar pago"><BanknotesIcon className="w-4 h-4" /></button>
+                        )}
                         <button onClick={() => openEdit(c)} className="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white" title="Editar"><PencilIcon className="w-4 h-4" /></button>
                         <button onClick={() => remove(c)} className="p-1.5 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400" title="Eliminar"><TrashIcon className="w-4 h-4" /></button>
                       </td>
@@ -289,6 +353,41 @@ export default function ComprasPage() {
           )}
         </section>
       </div>
+
+      {pagoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => !savingPago && setPagoModal(null)}>
+          <div className="bg-slate-800 rounded-xl border border-slate-700 max-w-sm w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-xl font-bold text-slate-100 mb-1">Registrar pago</h2>
+            <p className="text-slate-400 text-sm mb-4">Compra <span className="font-mono text-slate-300">{pagoModal.id_compra}</span> — pendiente {formatCurrency(pagoModal.pendiente_mxn ?? 0)}</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Monto a pagar (MXN) *</label>
+                <input type="number" min="0" step="0.01" value={pagoForm.monto_pago} onChange={(e) => setPagoForm((f) => ({ ...f, monto_pago: e.target.value }))} className="w-full rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-slate-200" />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Fecha de pago</label>
+                <input type="date" value={pagoForm.fecha_pago} onChange={(e) => setPagoForm((f) => ({ ...f, fecha_pago: e.target.value }))} className="w-full rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-slate-200" />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Método de pago</label>
+                <select value={pagoForm.metodo_pago} onChange={(e) => setPagoForm((f) => ({ ...f, metodo_pago: e.target.value }))} className="w-full rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-slate-200">
+                  <option value="transferencia">Transferencia</option>
+                  <option value="efectivo">Efectivo</option>
+                  <option value="cheque">Cheque</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Referencia (opcional)</label>
+                <input type="text" value={pagoForm.referencia} onChange={(e) => setPagoForm((f) => ({ ...f, referencia: e.target.value }))} placeholder="Número de transferencia, cheque, etc." className="w-full rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-slate-200" />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={savePago} disabled={savingPago} className="flex-1 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium disabled:opacity-50">{savingPago ? 'Guardando...' : 'Registrar pago'}</button>
+              <button onClick={() => !savingPago && setPagoModal(null)} className="btn-secondary">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modal !== 'cerrado' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => !saving && setModal('cerrado')}>

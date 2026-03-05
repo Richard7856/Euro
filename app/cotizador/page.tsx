@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeftIcon, PlusIcon, TrashIcon, ArrowPathIcon, CubeIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, PlusIcon, TrashIcon, ArrowPathIcon, CubeIcon, DocumentTextIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline';
 import { useEmpresaOptional } from '@/lib/empresaContext';
 
 type ProductoPrecio = {
@@ -115,6 +115,33 @@ export default function CotizadorPage() {
       .catch(() => setGuardadas([]))
       .finally(() => setLoadingGuardadas(false));
   }, [isEuromex]);
+
+  const deleteCotizacion = async (id: string) => {
+    if (!confirm('¿Eliminar esta cotización guardada?')) return;
+    try {
+      const res = await fetch(`/api/cotizaciones?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Error al eliminar');
+      fetchGuardadas();
+    } catch (e) {
+      setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Error al eliminar' });
+    }
+  };
+
+  const duplicarCotizacion = (c: CotizacionGuardada) => {
+    setProducto(c.producto_concepto);
+    setCantidad(String(c.cantidad));
+    setUnidad(c.unidad || 'kg');
+    setCostoCompraUsd(String(c.costo_compra_total_usd));
+    if (Array.isArray(c.gastos_extra) && c.gastos_extra.length > 0) setGastos(c.gastos_extra);
+    setTipoCambio(String(c.tipo_cambio_mxn || 18));
+    setMoneda((c.moneda_venta === 'MXN' ? 'MXN' : 'USD') as 'USD' | 'MXN');
+    setModoMargen((c.modo_margen === 'precio_fijo' ? 'precio_fijo' : 'porcentaje') as 'porcentaje' | 'precio_fijo');
+    setMargenPorcentaje(c.margen_porcentaje_deseado != null ? String(c.margen_porcentaje_deseado) : '');
+    setPrecioFijo(c.precio_venta_unitario != null ? String(c.precio_venta_unitario) : '');
+    setTab('cotizador');
+    setMessage({ type: 'ok', text: `Cotización de "${c.producto_concepto}" cargada en el calculador.` });
+  };
 
   useEffect(() => {
     fetchGuardadas();
@@ -934,15 +961,35 @@ export default function CotizadorPage() {
               ) : guardadas.length === 0 ? (
                 <p className="text-zinc-500 text-sm">Aún no hay cotizaciones guardadas.</p>
               ) : (
-                <ul className="space-y-2 max-h-64 overflow-y-auto">
+                <ul className="space-y-1 max-h-72 overflow-y-auto">
                   {guardadas.slice(0, 20).map((c) => (
-                    <li key={c.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2 border-b border-zinc-700/50 last:border-0 text-sm">
-                      <span className="text-zinc-300 font-medium">{c.producto_concepto}</span>
-                      <span className="text-zinc-500">
-                        {c.cantidad} {c.unidad} · {c.precio_venta_unitario != null ? (c.moneda_venta === 'MXN' ? formatMXN(c.precio_venta_unitario) : formatUSD(c.precio_venta_unitario)) : '-'} / {c.unidad}
-                        {c.margen_real_porcentaje != null && <span className="text-emerald-500 ml-1">({c.margen_real_porcentaje.toFixed(0)}%)</span>}
-                        {c.margen_porcentaje_deseado != null && c.margen_real_porcentaje == null && <span className="text-zinc-400 ml-1">({c.margen_porcentaje_deseado}% margen)</span>}
-                      </span>
+                    <li key={c.id} className="flex items-center gap-2 py-2 border-b border-zinc-700/50 last:border-0 text-sm">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-zinc-300 font-medium block truncate">{c.producto_concepto}</span>
+                        <span className="text-zinc-500 text-xs">
+                          {c.cantidad} {c.unidad} · {c.precio_venta_unitario != null ? (c.moneda_venta === 'MXN' ? formatMXN(c.precio_venta_unitario) : formatUSD(c.precio_venta_unitario)) : '-'} / {c.unidad}
+                          {c.margen_real_porcentaje != null && <span className="text-emerald-500 ml-1">({c.margen_real_porcentaje.toFixed(0)}%)</span>}
+                          {c.margen_porcentaje_deseado != null && c.margen_real_porcentaje == null && <span className="text-zinc-400 ml-1">({c.margen_porcentaje_deseado}% margen)</span>}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => duplicarCotizacion(c)}
+                          className="p-1.5 rounded text-zinc-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                          title="Cargar en calculador"
+                        >
+                          <DocumentDuplicateIcon className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteCotizacion(c.id)}
+                          className="p-1.5 rounded text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          title="Eliminar"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>

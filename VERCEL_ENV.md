@@ -1,8 +1,8 @@
 # Variables de entorno para Vercel
 
-Configura en **Vercel → Project → Settings → Environment Variables** (todas las que uses):
+Configura en **Vercel → Project → Settings → Environment Variables**:
 
-## Obligatorias para login y API
+## Obligatorias
 
 | Variable | Descripción | Dónde obtenerla |
 |----------|-------------|------------------|
@@ -14,8 +14,6 @@ Configura en **Vercel → Project → Settings → Environment Variables** (toda
 
 | Variable | Descripción |
 |----------|-------------|
-| `GOOGLE_SHEETS_ID` | ID del spreadsheet (Dashboard dinámico / datos) |
-| `GOOGLE_SHEETS_CLIENT_EMAIL` | Service account email (Google Cloud) |
-| `GOOGLE_SHEETS_PRIVATE_KEY` | Private key del service account (entre comillas, con `\n` para saltos de línea) |
+| `COTIZACIONES_BOT_API_KEY` | API key para el bot de cotizaciones (header `X-API-Key`) |
 
-**Nota:** Sin las variables de Supabase, el middleware no aplica login; con ellas, las rutas exigen autenticación y `/login` usa Supabase.
+**Nota:** Sin las variables de Supabase, el middleware no aplica login. Las rutas `/api/bot/*` requieren `COTIZACIONES_BOT_API_KEY` o la key generada desde Perfiles.

@@ -9,7 +9,7 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from('productos')
-      .select('id_producto, nombre_producto, cantidad_disponible, valor_unitario_promedio, valor_total')
+      .select('id_producto, nombre_producto, cantidad_disponible, valor_unitario_promedio, valor_total, categoria')
       .order('id_producto', { ascending: true });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -38,12 +38,13 @@ export async function POST(req: Request) {
       cantidad_disponible: num(body.cantidad_disponible) ?? 0,
       valor_unitario_promedio: num(body.valor_unitario_promedio) ?? null,
       valor_total: num(body.valor_total) ?? null,
+      categoria: body.categoria != null ? String(body.categoria).trim() || null : null,
     };
 
     const { data: inserted, error } = await supabase
       .from('productos')
       .insert(row)
-      .select('id_producto, nombre_producto, cantidad_disponible, valor_unitario_promedio, valor_total')
+      .select('id_producto, nombre_producto, cantidad_disponible, valor_unitario_promedio, valor_total, categoria')
       .single();
 
     if (error) {
@@ -74,6 +75,7 @@ export async function PATCH(req: Request) {
     if (body.cantidad_disponible !== undefined) updates.cantidad_disponible = num(body.cantidad_disponible) ?? 0;
     if (body.valor_unitario_promedio !== undefined) updates.valor_unitario_promedio = num(body.valor_unitario_promedio);
     if (body.valor_total !== undefined) updates.valor_total = num(body.valor_total);
+    if (body.categoria !== undefined) updates.categoria = body.categoria != null ? String(body.categoria).trim() || null : null;
 
     if (Object.keys(updates).length === 0) return NextResponse.json({ error: 'Nada que actualizar' }, { status: 400 });
 
@@ -81,7 +83,7 @@ export async function PATCH(req: Request) {
       .from('productos')
       .update(updates)
       .eq('id_producto', id_producto)
-      .select('id_producto, nombre_producto, cantidad_disponible, valor_unitario_promedio, valor_total')
+      .select('id_producto, nombre_producto, cantidad_disponible, valor_unitario_promedio, valor_total, categoria')
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -89,5 +91,28 @@ export async function PATCH(req: Request) {
   } catch (err) {
     console.error('API productos PATCH:', err);
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Error al actualizar producto' }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+
+    const { searchParams } = new URL(req.url);
+    const id_producto = searchParams.get('id_producto')?.trim();
+    if (!id_producto) return NextResponse.json({ error: 'Falta id_producto (SKU)' }, { status: 400 });
+
+    const { error } = await supabase
+      .from('productos')
+      .delete()
+      .eq('id_producto', id_producto);
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error('API productos DELETE:', err);
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Error al eliminar producto' }, { status: 500 });
   }
 }

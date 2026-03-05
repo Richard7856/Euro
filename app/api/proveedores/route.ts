@@ -94,6 +94,31 @@ export async function POST(req: Request) {
   }
 }
 
+export async function PATCH(req: Request) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+    if (!id) return NextResponse.json({ error: 'Falta id' }, { status: 400 });
+
+    const body = await req.json();
+    const str = (v: unknown) => (v != null && String(v).trim() !== '' ? String(v).trim() : null);
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    const fields = ['nombre_proveedor', 'contacto', 'telefono', 'email', 'condiciones_pago', 'tipo_producto', 'canal'];
+    for (const f of fields) { if (body[f] !== undefined) updates[f] = str(body[f]); }
+
+    const { data: row, error } = await supabase.from('proveedores').update(updates).eq('id', id).select().single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, proveedor: row });
+  } catch (err) {
+    console.error('API proveedores PATCH:', err);
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Error al actualizar' }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: Request) {
   try {
     const supabase = await createClient();

@@ -9,6 +9,7 @@ import {
   ArrowDownTrayIcon,
   ArrowUpTrayIcon,
   CubeIcon,
+  PencilIcon,
 } from '@heroicons/react/24/outline';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -56,9 +57,10 @@ export default function BodegasPage() {
   const [error, setError] = useState<string | null>(null);
   const [bodegaSeleccionada, setBodegaSeleccionada] = useState<string>('');
   const [modalBodega, setModalBodega] = useState(false);
+  const [editingBodega, setEditingBodega] = useState<Bodega | null>(null);
   const [modalMovimiento, setModalMovimiento] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [formBodega, setFormBodega] = useState({ nombre: '', codigo: '', direccion: '' });
+  const [formBodega, setFormBodega] = useState({ nombre: '', codigo: '', direccion: '', activo: true });
   const [formMov, setFormMov] = useState({
     tipo: 'entrada' as 'entrada' | 'salida',
     id_producto: '',
@@ -130,6 +132,18 @@ export default function BodegasPage() {
     }
   }, [bodegaSeleccionada, fetchInventario, fetchMovimientos]);
 
+  const openNewBodega = () => {
+    setEditingBodega(null);
+    setFormBodega({ nombre: '', codigo: '', direccion: '', activo: true });
+    setModalBodega(true);
+  };
+
+  const openEditBodega = (b: Bodega) => {
+    setEditingBodega(b);
+    setFormBodega({ nombre: b.nombre, codigo: b.codigo ?? '', direccion: b.direccion ?? '', activo: b.activo });
+    setModalBodega(true);
+  };
+
   const guardarBodega = async () => {
     if (!formBodega.nombre.trim()) {
       alert('El nombre es obligatorio');
@@ -137,19 +151,25 @@ export default function BodegasPage() {
     }
     setSaving(true);
     try {
-      const res = await fetch('/api/bodegas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nombre: formBodega.nombre.trim(),
-          codigo: formBodega.codigo.trim() || null,
-          direccion: formBodega.direccion.trim() || null,
-        }),
-      });
+      let res: Response;
+      if (editingBodega) {
+        res = await fetch(`/api/bodegas?id=${editingBodega.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nombre: formBodega.nombre.trim(), codigo: formBodega.codigo.trim() || null, direccion: formBodega.direccion.trim() || null, activo: formBodega.activo }),
+        });
+      } else {
+        res = await fetch('/api/bodegas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nombre: formBodega.nombre.trim(), codigo: formBodega.codigo.trim() || null, direccion: formBodega.direccion.trim() || null }),
+        });
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setModalBodega(false);
-      setFormBodega({ nombre: '', codigo: '', direccion: '' });
+      setEditingBodega(null);
+      setFormBodega({ nombre: '', codigo: '', direccion: '', activo: true });
       fetchBodegas();
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Error al guardar');
@@ -257,7 +277,7 @@ export default function BodegasPage() {
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setModalBodega(true)} className="btn-primary flex items-center gap-2">
+            <button onClick={openNewBodega} className="btn-primary flex items-center gap-2">
               <PlusIcon className="w-5 h-5" /> Nueva bodega
             </button>
             <button
@@ -289,6 +309,15 @@ export default function BodegasPage() {
                   </option>
                 ))}
               </select>
+              {bodegaSeleccionada && bodegas.find((b) => b.id === bodegaSeleccionada) && (
+                <button
+                  onClick={() => openEditBodega(bodegas.find((b) => b.id === bodegaSeleccionada)!)}
+                  className="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white"
+                  title="Editar bodega"
+                >
+                  <PencilIcon className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
             {bodegaSeleccionada && (
@@ -422,7 +451,7 @@ export default function BodegasPage() {
       {modalBodega && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => !saving && setModalBodega(false)}>
           <div className="bg-slate-800 rounded-xl border border-slate-700 max-w-md w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-xl font-bold text-slate-100 mb-4">Nueva bodega</h2>
+            <h2 className="text-xl font-bold text-slate-100 mb-4">{editingBodega ? 'Editar bodega' : 'Nueva bodega'}</h2>
             <div className="space-y-3">
               <label className="block text-sm text-slate-400">Nombre *</label>
               <input
@@ -448,12 +477,18 @@ export default function BodegasPage() {
                 className="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-slate-200"
                 placeholder="Opcional"
               />
+              {editingBodega && (
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" checked={formBodega.activo} onChange={(e) => setFormBodega((f) => ({ ...f, activo: e.target.checked }))} className="w-4 h-4 rounded" />
+                  <span className="text-sm text-slate-300">Activa</span>
+                </label>
+              )}
             </div>
             <div className="flex gap-3 mt-6">
               <button onClick={guardarBodega} disabled={saving} className="btn-primary flex-1">
                 {saving ? 'Guardando...' : 'Guardar'}
               </button>
-              <button onClick={() => !saving && setModalBodega(false)} className="btn-secondary">Cancelar</button>
+              <button onClick={() => { if (!saving) { setModalBodega(false); setEditingBodega(null); } }} className="btn-secondary">Cancelar</button>
             </div>
           </div>
         </div>

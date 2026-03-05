@@ -52,6 +52,11 @@ export default function UsuariosPage() {
   const [updatingRol, setUpdatingRol] = useState<string | null>(null);
   const [updatingPermisos, setUpdatingPermisos] = useState<string | null>(null);
   const [localOverrides, setLocalOverrides] = useState<Record<string, Record<string, boolean>>>({});
+  const [apiKeyStatus, setApiKeyStatus] = useState<{ configured: boolean; masked?: string; source?: string } | null>(null);
+  const [apiKeyLoading, setApiKeyLoading] = useState(false);
+  const [apiKeyGenerating, setApiKeyGenerating] = useState(false);
+  const [newApiKey, setNewApiKey] = useState<string | null>(null);
+  const [apiKeyMessage, setApiKeyMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
 
   const fetchPerfiles = useCallback(async () => {
     setLoading(true);
@@ -76,6 +81,46 @@ export default function UsuariosPage() {
   useEffect(() => {
     if (isAdmin) fetchPerfiles();
   }, [isAdmin, fetchPerfiles]);
+
+  const fetchApiKeyStatus = useCallback(() => {
+    if (!isAdmin) return;
+    setApiKeyLoading(true);
+    fetch('/api/config/bot-api-key', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => setApiKeyStatus({ configured: d.configured, masked: d.masked, source: d.source }))
+      .catch(() => setApiKeyStatus(null))
+      .finally(() => setApiKeyLoading(false));
+  }, [isAdmin]);
+
+  useEffect(() => { if (isAdmin) fetchApiKeyStatus(); }, [isAdmin, fetchApiKeyStatus]);
+
+  const generateBotApiKey = async () => {
+    setApiKeyGenerating(true);
+    setNewApiKey(null);
+    try {
+      const res = await fetch('/api/config/bot-api-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action: 'generate' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Error');
+      setNewApiKey(data.api_key ?? '');
+      fetchApiKeyStatus();
+    } catch (e) {
+      setApiKeyMessage({ type: 'error', text: e instanceof Error ? e.message : 'Error al generar' });
+    } finally {
+      setApiKeyGenerating(false);
+    }
+  };
+
+  const copyApiKey = () => {
+    if (newApiKey) {
+      navigator.clipboard.writeText(newApiKey);
+      setApiKeyMessage({ type: 'ok', text: 'API key copiada al portapapeles.' });
+    }
+  };
 
   const updateRol = async (userId: string, rol: ProfileRole) => {
     setUpdatingRol(userId);
@@ -150,6 +195,41 @@ export default function UsuariosPage() {
 
         <div className="rounded-xl bg-slate-800/30 border border-slate-700/50 p-4 text-slate-400 text-sm">
           <strong className="text-slate-300">Cómo funciona:</strong> El <strong>rol</strong> define el tipo de usuario (Admin ve todo y puede gestionar). Los <strong>permisos por módulo</strong> permiten ocultar secciones concretas: si desmarcas &quot;Puede ver Ventas&quot;, ese usuario no verá el enlace a Ventas en el menú ni podrá acceder. Deja todos marcados para acceso completo (por defecto).
+        </div>
+
+        {/* API Bot Key */}
+        <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4 space-y-3">
+          <h2 className="text-base font-semibold text-slate-200">API Bot Cotizaciones</h2>
+          <p className="text-slate-400 text-sm">
+            Permite que el bot de cotizaciones (WhatsApp, etc.) consulte productos y envíe precios. Header: <code className="text-slate-300">X-API-Key</code>.
+          </p>
+          {apiKeyMessage && (
+            <div className={`rounded-lg px-3 py-2 text-sm ${apiKeyMessage.type === 'ok' ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300' : 'bg-red-500/10 border border-red-500/30 text-red-300'}`}>
+              {apiKeyMessage.text}
+            </div>
+          )}
+          {apiKeyLoading ? (
+            <p className="text-slate-500 text-sm">Comprobando…</p>
+          ) : (
+            <div className="flex flex-wrap items-center gap-3">
+              {apiKeyStatus?.configured ? (
+                <>
+                  <span className="text-emerald-400 text-sm font-medium">Configurada</span>
+                  {apiKeyStatus.masked && <span className="text-slate-500 font-mono text-sm">{apiKeyStatus.masked}</span>}
+                  {apiKeyStatus.source === 'env' && <span className="text-slate-500 text-xs">(variable de entorno)</span>}
+                </>
+              ) : (
+                <span className="text-slate-500 text-sm">No configurada</span>
+              )}
+              <button
+                onClick={generateBotApiKey}
+                disabled={apiKeyGenerating}
+                className="px-4 py-2 rounded-lg bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600/30 text-sm font-medium disabled:opacity-50"
+              >
+                {apiKeyGenerating ? 'Generando…' : 'Generar nueva API key'}
+              </button>
+            </div>
+          )}
         </div>
 
         {loading && (
@@ -227,6 +307,20 @@ export default function UsuariosPage() {
           Los cambios de permisos se aplican al recargar o al navegar. Admin siempre tiene acceso a todo.
         </p>
       </div>
+
+      {newApiKey && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" role="dialog" aria-modal="true">
+          <div className="bg-slate-800 rounded-xl border border-slate-600 max-w-lg w-full p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-100 mb-2">API key generada</h3>
+            <p className="text-slate-400 text-sm mb-3">Cópiala y guárdala en un lugar seguro. No se volverá a mostrar.</p>
+            <div className="flex gap-2 mb-4">
+              <input type="text" readOnly value={newApiKey} className="flex-1 rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-slate-200 font-mono text-sm" />
+              <button type="button" onClick={copyApiKey} className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-500">Copiar</button>
+            </div>
+            <button type="button" onClick={() => setNewApiKey(null)} className="w-full py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600">Cerrar</button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

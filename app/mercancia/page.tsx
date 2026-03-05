@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { CubeIcon, ArrowLeftIcon, ChartBarIcon, BuildingStorefrontIcon, FunnelIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
+import { CubeIcon, ArrowLeftIcon, ChartBarIcon, BuildingStorefrontIcon, FunnelIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { useCurrency } from '@/lib/currencyContext';
 import ExportButtons from '@/components/ExportButtons';
 import { useEmpresaOptional } from '@/lib/empresaContext';
@@ -13,6 +13,7 @@ type Producto = {
   cantidad_disponible: number;
   valor_unitario_promedio: number;
   valor_total: number;
+  categoria: string | null;
 };
 
 export default function MercanciaPage() {
@@ -22,15 +23,16 @@ export default function MercanciaPage() {
   const [error, setError] = useState<string | null>(null);
   const [filtroTexto, setFiltroTexto] = useState('');
   const [editingProducto, setEditingProducto] = useState<Producto | null>(null);
-  const [editForm, setEditForm] = useState({ nombre_producto: '', cantidad_disponible: '', valor_unitario_promedio: '', valor_total: '' });
+  const [editForm, setEditForm] = useState({ nombre_producto: '', cantidad_disponible: '', valor_unitario_promedio: '', valor_total: '', categoria: '' });
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const { formatCurrency } = useCurrency();
 
   const fetchInventario = useCallback(() => {
     setLoading(true);
-    fetch('/api/datos', { credentials: 'include' })
+    fetch('/api/productos', { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Error al cargar'))))
-      .then((d) => setInventario(d.inventario ?? []))
+      .then((d) => setInventario(d.productos ?? []))
       .catch((e) => setError(e instanceof Error ? e.message : 'Error'))
       .finally(() => setLoading(false));
   }, [empresa]);
@@ -57,6 +59,7 @@ export default function MercanciaPage() {
       cantidad_disponible: String(p.cantidad_disponible ?? ''),
       valor_unitario_promedio: p.valor_unitario_promedio != null ? String(p.valor_unitario_promedio) : '',
       valor_total: p.valor_total != null ? String(p.valor_total) : '',
+      categoria: p.categoria ?? '',
     });
   };
 
@@ -77,6 +80,7 @@ export default function MercanciaPage() {
           cantidad_disponible: cantidad,
           valor_unitario_promedio: valorUnit,
           valor_total: valorTotal,
+          categoria: editForm.categoria.trim() || null,
         }),
       });
       const data = await res.json();
@@ -87,6 +91,24 @@ export default function MercanciaPage() {
       setError(e instanceof Error ? e.message : 'Error al guardar');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const eliminarProducto = async (id_producto: string) => {
+    if (!confirm(`¿Eliminar el producto "${id_producto}"? Esta acción no se puede deshacer.`)) return;
+    setDeletingId(id_producto);
+    try {
+      const res = await fetch(`/api/productos?id_producto=${encodeURIComponent(id_producto)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Error al eliminar');
+      fetchInventario();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al eliminar');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -164,10 +186,11 @@ export default function MercanciaPage() {
                   <tr>
                     <th className="py-3 px-4 font-medium">ID</th>
                     <th className="py-3 px-4 font-medium">Producto</th>
+                    <th className="py-3 px-4 font-medium">Categoría</th>
                     <th className="py-3 px-4 font-medium text-right">Cantidad</th>
                     <th className="py-3 px-4 font-medium text-right">Valor unit.</th>
                     <th className="py-3 px-4 font-medium text-right">Valor total</th>
-                    <th className="py-3 px-4 font-medium w-24">Acciones</th>
+                    <th className="py-3 px-4 font-medium w-28">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
@@ -175,18 +198,30 @@ export default function MercanciaPage() {
                     <tr key={p.id_producto} className="hover:bg-slate-800/30">
                       <td className="py-3 px-4 font-mono text-blue-400">{p.id_producto}</td>
                       <td className="py-3 px-4 font-medium text-slate-200">{p.nombre_producto}</td>
+                      <td className="py-3 px-4 text-slate-400 text-sm">{p.categoria ?? <span className="text-slate-600 italic">—</span>}</td>
                       <td className="py-3 px-4 text-right text-slate-300">{p.cantidad_disponible ?? 0}</td>
                       <td className="py-3 px-4 text-right font-mono text-slate-400">{formatCurrency(p.valor_unitario_promedio ?? 0)}</td>
                       <td className="py-3 px-4 text-right font-mono text-blue-400">{formatCurrency(p.valor_total ?? 0)}</td>
                       <td className="py-3 px-4">
-                        <button
-                          type="button"
-                          onClick={() => openEdit(p)}
-                          className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition-colors"
-                          title="Editar"
-                        >
-                          <PencilSquareIcon className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openEdit(p)}
+                            className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition-colors"
+                            title="Editar"
+                          >
+                            <PencilSquareIcon className="w-5 h-5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => eliminarProducto(p.id_producto)}
+                            disabled={deletingId === p.id_producto}
+                            className="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40"
+                            title="Eliminar"
+                          >
+                            <TrashIcon className="w-5 h-5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -213,6 +248,14 @@ export default function MercanciaPage() {
                   type="text"
                   value={editForm.nombre_producto}
                   onChange={(e) => setEditForm((f) => ({ ...f, nombre_producto: e.target.value }))}
+                  className="w-full rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-slate-200"
+                />
+                <label className="block text-sm text-slate-400">Categoría</label>
+                <input
+                  type="text"
+                  value={editForm.categoria}
+                  onChange={(e) => setEditForm((f) => ({ ...f, categoria: e.target.value }))}
+                  placeholder="ej. Frutas secas, Electrónica..."
                   className="w-full rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-slate-200"
                 />
                 <label className="block text-sm text-slate-400">Cantidad disponible</label>

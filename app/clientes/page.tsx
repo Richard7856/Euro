@@ -17,8 +17,12 @@ type Cliente = {
   estado: string | null;
   pais: string | null;
   canal_principal: string | null;
+  limite_credito: number | null;
   created_at: string;
 };
+
+const formatMXN = (n: number) =>
+  new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
 
 const inputClass = 'w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-slate-200';
 
@@ -40,6 +44,7 @@ export default function ClientesPage() {
     estado: '',
     pais: '',
     canal_principal: '',
+    limite_credito: '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -56,7 +61,7 @@ export default function ClientesPage() {
 
   const openNew = () => {
     setEditing(null);
-    setForm({ id_cliente: '', nombre_cliente: '', rfc_taxid: '', contacto: '', telefono: '', email: '', direccion: '', ciudad: '', estado: '', pais: '', canal_principal: '' });
+    setForm({ id_cliente: '', nombre_cliente: '', rfc_taxid: '', contacto: '', telefono: '', email: '', direccion: '', ciudad: '', estado: '', pais: '', canal_principal: '', limite_credito: '' });
     setModal('nuevo');
   };
 
@@ -74,6 +79,7 @@ export default function ClientesPage() {
       estado: c.estado ?? '',
       pais: c.pais ?? '',
       canal_principal: c.canal_principal ?? '',
+      limite_credito: c.limite_credito != null ? String(c.limite_credito) : '',
     });
     setModal('editar');
   };
@@ -85,11 +91,24 @@ export default function ClientesPage() {
     }
     setSaving(true);
     try {
-      const res = await fetch('/api/clientes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
+      let res: Response;
+      const payload = {
+        ...form,
+        limite_credito: form.limite_credito.trim() === '' ? null : parseFloat(form.limite_credito.replace(/[^0-9.-]/g, '')) || null,
+      };
+      if (modal === 'editar' && editing) {
+        res = await fetch(`/api/clientes?id=${editing.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        res = await fetch('/api/clientes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
       if (!res.ok) throw new Error((await res.json()).error);
       setModal('cerrado');
       fetchClientes();
@@ -146,6 +165,7 @@ export default function ClientesPage() {
                     <th className="py-3 px-4 font-medium">Contacto</th>
                     <th className="py-3 px-4 font-medium">Teléfono</th>
                     <th className="py-3 px-4 font-medium hidden md:table-cell">Email</th>
+                    <th className="py-3 px-4 font-medium hidden lg:table-cell text-right">Límite crédito</th>
                     <th className="py-3 px-4 w-24">Acciones</th>
                   </tr>
                 </thead>
@@ -157,6 +177,13 @@ export default function ClientesPage() {
                       <td className="py-3 px-4 text-slate-400">{c.contacto || '—'}</td>
                       <td className="py-3 px-4 text-slate-400">{c.telefono || '—'}</td>
                       <td className="py-3 px-4 text-slate-400 hidden md:table-cell truncate max-w-[180px]" title={c.email || ''}>{c.email || '—'}</td>
+                      <td className="py-3 px-4 hidden lg:table-cell text-right font-mono text-sm">
+                        {c.limite_credito != null ? (
+                          <span className="text-blue-400">{formatMXN(c.limite_credito)}</span>
+                        ) : (
+                          <span className="text-slate-600 italic text-xs">Sin límite</span>
+                        )}
+                      </td>
                       <td className="py-3 px-4 flex gap-2">
                         <button onClick={() => openEdit(c)} className="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white" title="Editar"><PencilIcon className="w-4 h-4" /></button>
                         <button onClick={() => remove(c.id)} className="p-1.5 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400" title="Eliminar"><TrashIcon className="w-4 h-4" /></button>
@@ -198,6 +225,15 @@ export default function ClientesPage() {
               </div>
               <label className="block text-sm text-slate-400">Canal principal</label>
               <input type="text" value={form.canal_principal} onChange={(e) => setForm((f) => ({ ...f, canal_principal: e.target.value }))} className={inputClass} />
+              <label className="block text-sm text-slate-400">Límite de crédito (MXN)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={form.limite_credito}
+                onChange={(e) => setForm((f) => ({ ...f, limite_credito: e.target.value }))}
+                placeholder="Dejar vacío = sin límite"
+                className={inputClass}
+              />
             </div>
             <div className="flex gap-3 mt-6">
               <button onClick={save} disabled={saving} className="btn-primary flex-1">{saving ? 'Guardando...' : 'Guardar'}</button>

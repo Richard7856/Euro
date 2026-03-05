@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { ArrowLeftIcon, CurrencyDollarIcon, PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import ExportButtons from '@/components/ExportButtons';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useEmpresaOptional } from '@/lib/empresaContext';
@@ -156,9 +157,31 @@ export default function VentasPage() {
               <p className="text-slate-400">Registra y edita cobros de ventas.</p>
             </div>
           </div>
-          <button onClick={openNew} className="btn-primary flex items-center gap-2">
-            <PlusIcon className="w-5 h-5" /> Nueva venta / cobro
-          </button>
+          <div className="flex gap-2 items-center flex-wrap">
+            <ExportButtons
+              title="Ventas / Cobros"
+              columns={[
+                { key: 'id_venta', label: 'ID Venta' },
+                { key: 'id_producto', label: 'Producto' },
+                { key: 'fecha_pago', label: 'Fecha' },
+                { key: 'metodo_pago', label: 'Método' },
+                { key: 'canal_cobro', label: 'Canal' },
+                { key: 'monto_pagado', label: 'Monto (MXN)' },
+              ]}
+              rows={cobros.map((c) => ({
+                id_venta: c.id_venta,
+                id_producto: c.id_producto ?? '',
+                fecha_pago: c.fecha_pago,
+                metodo_pago: c.metodo_pago ?? '',
+                canal_cobro: c.canal_cobro ?? '',
+                monto_pagado: c.monto_pagado,
+              }))}
+              filenameBase="ventas-cobros"
+            />
+            <button onClick={openNew} className="btn-primary flex items-center gap-2">
+              <PlusIcon className="w-5 h-5" /> Nueva venta / cobro
+            </button>
+          </div>
         </div>
 
         {!loading && cobros.length > 0 && (

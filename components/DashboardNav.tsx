@@ -19,6 +19,8 @@ import {
   DocumentTextIcon,
   ArchiveBoxIcon,
   MapPinIcon,
+  BellAlertIcon,
+  ChartBarSquareIcon,
 } from '@heroicons/react/24/outline';
 import {
   HomeIcon as HomeIconSolid,
@@ -35,6 +37,8 @@ import {
   DocumentTextIcon as DocumentTextIconSolid,
   ArchiveBoxIcon as ArchiveBoxIconSolid,
   MapPinIcon as MapPinIconSolid,
+  BellAlertIcon as BellAlertIconSolid,
+  ChartBarSquareIcon as ChartBarSquareIconSolid,
 } from '@heroicons/react/24/solid';
 import LogoutButton from './LogoutButton';
 import CurrencyToggle from './CurrencyToggle';
@@ -45,6 +49,7 @@ import { EMPRESAS, EMPRESA_THEMES, type EmpresaSlug } from '@/lib/empresaContext
 
 const navItems: { href: string; label: string; moduleKey: string; Icon: typeof HomeIcon; IconActive: typeof HomeIconSolid; euromexOnly?: boolean }[] = [
   { href: '/', label: 'Inicio', moduleKey: 'inicio', Icon: HomeIcon, IconActive: HomeIconSolid },
+  { href: '/alertas', label: 'Alertas', moduleKey: 'alertas', Icon: BellAlertIcon, IconActive: BellAlertIconSolid },
   { href: '/financiero', label: 'Financiero', moduleKey: 'financiero', Icon: CurrencyDollarIcon, IconActive: CurrencyDollarIconSolid },
   { href: '/ventas', label: 'Ventas', moduleKey: 'ventas', Icon: ArrowTrendingUpIcon, IconActive: ArrowTrendingUpIconSolid },
   { href: '/compras', label: 'Compras', moduleKey: 'compras', Icon: ShoppingCartIcon, IconActive: ShoppingCartIconSolid },
@@ -56,6 +61,7 @@ const navItems: { href: string; label: string; moduleKey: string; Icon: typeof H
   { href: '/proveedores', label: 'Proveedores', moduleKey: 'proveedores', Icon: BuildingStorefrontIcon, IconActive: BuildingStorefrontIconSolid },
   { href: '/gastos', label: 'Gastos', moduleKey: 'gastos', Icon: BanknotesIcon, IconActive: BanknotesIconSolid },
   { href: '/promesas', label: 'Promesas de pago', moduleKey: 'promesas', Icon: CalendarDaysIcon, IconActive: CalendarDaysIconSolid },
+  { href: '/comparativo', label: 'Comparativo', moduleKey: 'comparativo', Icon: ChartBarSquareIcon, IconActive: ChartBarSquareIconSolid },
 ];
 
 const rolLabel: Record<string, string> = {

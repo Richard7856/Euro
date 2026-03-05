@@ -1,4 +1,5 @@
 import type { Compra, Inventario, CuentaPorCobrar } from '@/types/financial';
+import { differenceInDays, parseISO } from 'date-fns';
 
 export interface AlertaCritica {
   prioridad: 'CRÍTICO' | 'ALTA' | 'MEDIA' | 'BAJA';
@@ -35,21 +36,55 @@ interface DatosAnalisis {
   cuentas: CuentaPorCobrar[];
 }
 
+function safeParseDate(s: string | undefined): Date | null {
+  if (!s) return null;
+  try {
+    const d = parseISO(s);
+    return isNaN(d.getTime()) ? null : d;
+  } catch {
+    return null;
+  }
+}
+
 export function generarAlertasCriticas(datos: DatosAnalisis): AlertaCritica[] {
   const alertas: AlertaCritica[] = [];
+  const hoy = new Date();
 
-  // Crédito Almendra DVD_BRS
-  const creditoAlmendra = datos.compras.find(
-    c => c.proveedor?.includes('DVD_BRS') || (c.producto_nombre?.toLowerCase().includes('almendra') && c.estado === 'CRÉDITO')
-  );
-  if (creditoAlmendra && creditoAlmendra.pendiente_mxn > 0) {
-    alertas.push({
-      prioridad: 'CRÍTICO',
-      alerta: `Crédito ${creditoAlmendra.producto_nombre} ${creditoAlmendra.proveedor}`,
-      monto: creditoAlmendra.pendiente_mxn,
-      fechaLimite: creditoAlmendra.fecha_vencimiento || creditoAlmendra.nota_clave?.replace('Vence ', '') || '30/01/2026',
-      accionRequerida: 'Pagar o renegociar INMEDIATO',
-    });
+  // Compras a crédito vencidas o por vencer
+  const comprasCredito = datos.compras.filter((c) => {
+    const esCredito = c.tipo_pago === 'Crédito' || (c as unknown as Record<string, unknown>).tipo_compra === 'Crédito';
+    return esCredito && (c.pendiente_mxn ?? 0) > 0;
+  });
+  for (const c of comprasCredito) {
+    const venc = safeParseDate(c.fecha_vencimiento);
+    if (!venc) continue;
+    const dias = differenceInDays(venc, hoy);
+    const nombre = c.producto_nombre ? ` — ${c.producto_nombre}` : '';
+    if (dias < 0) {
+      alertas.push({
+        prioridad: 'CRÍTICO',
+        alerta: `Pago vencido${nombre} (hace ${Math.abs(dias)} días)`,
+        monto: c.pendiente_mxn ?? 0,
+        fechaLimite: c.fecha_vencimiento!,
+        accionRequerida: 'Pagar o renegociar de inmediato',
+      });
+    } else if (dias <= 7) {
+      alertas.push({
+        prioridad: 'CRÍTICO',
+        alerta: `Crédito por vencer${nombre} en ${dias} día${dias === 1 ? '' : 's'}`,
+        monto: c.pendiente_mxn ?? 0,
+        fechaLimite: c.fecha_vencimiento!,
+        accionRequerida: 'Programar pago esta semana',
+      });
+    } else if (dias <= 30) {
+      alertas.push({
+        prioridad: 'ALTA',
+        alerta: `Crédito próximo a vencer${nombre} en ${dias} días`,
+        monto: c.pendiente_mxn ?? 0,
+        fechaLimite: c.fecha_vencimiento!,
+        accionRequerida: 'Planificar pago',
+      });
+    }
   }
 
   // Déficit de caja
@@ -63,8 +98,18 @@ export function generarAlertasCriticas(datos: DatosAnalisis): AlertaCritica[] {
     });
   }
 
-  // Cobranza pendiente
-  if (datos.cuentasPorCobrar > 0) {
+  // CxC vencidas más de 60 días
+  const cxcVencidas60 = datos.cuentas.filter((c) => c.dias_vencido > 60 && (c.monto_pendiente ?? 0) > 0);
+  if (cxcVencidas60.length > 0) {
+    const total = cxcVencidas60.reduce((s, c) => s + (c.monto_pendiente ?? 0), 0);
+    alertas.push({
+      prioridad: 'ALTA',
+      alerta: `${cxcVencidas60.length} cuenta${cxcVencidas60.length > 1 ? 's' : ''} por cobrar con +60 días vencida${cxcVencidas60.length > 1 ? 's' : ''}`,
+      monto: total,
+      fechaLimite: 'Urgente',
+      accionRequerida: 'Gestionar cobranza con clientes',
+    });
+  } else if (datos.cuentasPorCobrar > 0) {
     alertas.push({
       prioridad: 'ALTA',
       alerta: 'Cobranza pendiente',
@@ -74,65 +119,17 @@ export function generarAlertasCriticas(datos: DatosAnalisis): AlertaCritica[] {
     });
   }
 
-  // Pistache sin vender (inventario pistache)
-  const pistacheInv = datos.inventario
-    .filter(i => i.nombre_producto?.toLowerCase().includes('pistache'))
-    .reduce((s, i) => s + i.valor_total, 0);
-  const pistacheCompras = datos.compras
-    .filter(c => c.producto_nombre?.toLowerCase().includes('pistache') && c.estado !== 'PAGADO')
-    .reduce((s, c) => s + c.pendiente_mxn + (c.inversion_mxn - c.pagado_mxn), 0);
-  const pistacheTotal = pistacheInv + pistacheCompras;
-  if (pistacheTotal > 100000) {
-    alertas.push({
-      prioridad: 'ALTA',
-      alerta: 'Pistache sin vender / comprometido',
-      monto: pistacheTotal,
-      fechaLimite: '1 mes',
-      accionRequerida: 'Estrategia comercial',
-    });
-  }
-
-  // Limón perdido
-  const limonPerdido = datos.compras.find(c => c.estado === 'PERDIDO' && c.producto_nombre?.toLowerCase().includes('limón'));
-  if (limonPerdido) {
-    alertas.push({
-      prioridad: 'MEDIA',
-      alerta: 'Limón perdido',
-      monto: limonPerdido.pendiente_mxn || limonPerdido.inversion_mxn,
-      fechaLimite: 'En proceso',
-      accionRequerida: 'Seguimiento demanda',
-    });
-  }
-
-  // Óptica no recibida
-  const opticaNoRecibida = datos.compras.find(c => c.estado === 'NO RECIBIDA');
-  if (opticaNoRecibida) {
-    alertas.push({
-      prioridad: 'MEDIA',
-      alerta: 'Óptica no recibida',
-      monto: opticaNoRecibida.inversion_mxn,
-      fechaLimite: 'Pendiente',
-      accionRequerida: 'Reclamo proveedor',
-    });
-  }
-
-  // Dátil vendido a pérdida (inversión alta vs recuperación baja - margen negativo estimado)
-  const datilCompras = datos.compras.filter(c =>
-    c.producto_nombre?.toLowerCase().includes('dátil') || c.producto_nombre?.toLowerCase().includes('datil')
+  // Inventario con valor alto y baja rotación
+  const inventarioParado = datos.inventario.filter(
+    (i) => i.valor_total > 500000 && (i.rotacion_dias > 90 || !i.rotacion_dias)
   );
-  const datilInversion = datilCompras.reduce((s, c) => s + c.inversion_mxn, 0);
-  const datilRecuperado = datilCompras.reduce((s, c) => s + c.pagado_mxn, 0);
-  const datilEnInventario = datos.inventario
-    .filter(i => i.nombre_producto?.toLowerCase().includes('dátil'))
-    .reduce((s, i) => s + i.valor_total, 0);
-  const perdidaDatil = datilInversion - datilRecuperado - datilEnInventario;
-  if (perdidaDatil > 100000) {
+  for (const inv of inventarioParado) {
     alertas.push({
-      prioridad: 'BAJA',
-      alerta: 'Dátil vendido a pérdida',
-      monto: -perdidaDatil,
-      fechaLimite: 'N/A',
-      accionRequerida: 'Análisis post-mortem',
+      prioridad: 'MEDIA',
+      alerta: `Inventario parado — ${inv.nombre_producto ?? inv.id_producto}`,
+      monto: inv.valor_total,
+      fechaLimite: '1 mes',
+      accionRequerida: 'Estrategia comercial para liquidar',
     });
   }
 
@@ -143,7 +140,6 @@ export function generarAlertasCriticas(datos: DatosAnalisis): AlertaCritica[] {
 }
 
 export function generarMetricasOperativas(datos: DatosAnalisis): MetricaOperativa[] {
-  const ventasAnualizadas = datos.totalCobrado * 12; // simplificado
   const rotacion = datos.inventarioValor > 0
     ? (datos.totalCobrado / datos.inventarioValor) * 100
     : 0;
@@ -155,13 +151,12 @@ export function generarMetricasOperativas(datos: DatosAnalisis): MetricaOperativ
   const ventasDiarias = datos.totalCobrado > 0 ? datos.totalCobrado / 365 : 1;
   const diasInventario = ventasDiarias > 0 ? Math.round(datos.inventarioValor / ventasDiarias) : 0;
 
-  // Margen aproximado (ingresos - costos compras pagadas - gastos) / ingresos
-  const costosAprox = datos.compras.reduce((s, c) => s + c.pagado_mxn, 0);
+  const costosAprox = datos.compras.reduce((s, c) => s + (c.pagado_mxn ?? 0), 0);
   const margen = datos.totalCobrado > 0
     ? ((datos.totalCobrado - costosAprox) / datos.totalCobrado) * 100
     : 0;
 
-  const metricas: MetricaOperativa[] = [
+  return [
     {
       kpi: 'Rotación de Inventario',
       valor: `${rotacion.toFixed(1)}%`,
@@ -199,11 +194,9 @@ export function generarMetricasOperativas(datos: DatosAnalisis): MetricaOperativ
       valor: new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 0 }).format(capitalTrabajo),
       meta: 'Positivo',
       estado: capitalTrabajo > 0 ? 'bueno' : 'critico',
-      interpretacion: capitalTrabajo > 0 ? 'Cuentas por cobrar + inventario > por pagar' : 'Capital de trabajo negativo',
+      interpretacion: capitalTrabajo > 0 ? 'CxC + inventario > CxP' : 'Capital de trabajo negativo',
     },
   ];
-
-  return metricas;
 }
 
 export function generarRecomendaciones(alertas: AlertaCritica[], metricas: MetricaOperativa[]): RecomendacionEstrategica[] {
@@ -218,31 +211,30 @@ export function generarRecomendaciones(alertas: AlertaCritica[], metricas: Metri
     }
   };
 
-  if (alertas.some(a => a.alerta.includes('Crédito') && a.prioridad === 'CRÍTICO')) {
-    add('Tesorería', 'Renegociar plazo almendra o conseguir financiamiento', 'Alto', 'Inmediato');
+  if (alertas.some(a => (a.alerta.includes('vencido') || a.alerta.includes('por vencer')) && a.prioridad === 'CRÍTICO')) {
+    add('Tesorería', 'Renegociar plazos o conseguir financiamiento para créditos críticos', 'Alto', 'Inmediato');
   }
   if (alertas.some(a => a.alerta.includes('Déficit'))) {
     add('Tesorería', 'Reducir gastos y acelerar cobranza', 'Alto', 'Inmediato');
   }
-  if (alertas.some(a => a.alerta.includes('Cobranza pendiente'))) {
-    add('Cobranza', 'Implementar proceso agresivo de cobranza', 'Alto', 'Inmediato');
+  if (alertas.some(a => a.alerta.includes('60 días') || a.alerta.includes('Cobranza pendiente'))) {
+    add('Cobranza', 'Implementar proceso activo de cobranza para cuentas vencidas', 'Alto', 'Inmediato');
   }
-  if (alertas.some(a => a.alerta.includes('Pistache'))) {
-    add('Comercial', 'Campaña pistache: descuentos por volumen o promociones', 'Muy Alto', '1 semana');
+  if (alertas.some(a => a.alerta.includes('Inventario parado'))) {
+    add('Comercial', 'Estrategia de liquidación para inventario parado (descuentos por volumen)', 'Muy Alto', '2 semanas');
   }
-  if (alertas.some(a => a.alerta.includes('Limón') || a.alerta.includes('demanda'))) {
-    add('Legal', 'Seguimiento demanda limón + reclamos', 'Medio', '2 semanas');
-  }
-  if (alertas.some(a => a.alerta.includes('Óptica'))) {
-    add('Compras', 'Reclamar equipo óptica no entregado al proveedor', 'Medio', '2 semanas');
-  }
-  if (alertas.some(a => a.alerta.includes('Dátil') && a.alerta.includes('pérdida'))) {
-    add('Producto', 'Discontinuar dátil (pérdida significativa)', 'Medio', '1 mes');
+  if (alertas.some(a => a.alerta.includes('próximo a vencer'))) {
+    add('Tesorería', 'Planificar flujo de caja para cubrir créditos próximos', 'Medio', 'Este mes');
   }
 
   const rotacion = metricas.find(m => m.kpi.includes('Rotación'));
   if (rotacion && (rotacion.estado === 'bajo' || rotacion.estado === 'critico')) {
     add('Financiero', 'Controlar compras hasta mejorar rotación de inventario', 'Alto', 'Continuo');
+  }
+
+  const eficiencia = metricas.find(m => m.kpi.includes('Eficiencia'));
+  if (eficiencia && (eficiencia.estado === 'bajo' || eficiencia.estado === 'critico')) {
+    add('Cobranza', 'Revisar términos de crédito con clientes y acortar plazos', 'Medio', 'Este mes');
   }
 
   return recs;

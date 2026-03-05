@@ -76,11 +76,20 @@ export default function ProveedoresPage() {
     }
     setSaving(true);
     try {
-      const res = await fetch('/api/proveedores', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
+      let res: Response;
+      if (modal === 'editar' && editing) {
+        res = await fetch(`/api/proveedores?id=${editing.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(form),
+        });
+      } else {
+        res = await fetch('/api/proveedores', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(form),
+        });
+      }
       if (!res.ok) throw new Error((await res.json()).error);
       setModal('cerrado');
       fetchProveedores();
