@@ -2,8 +2,60 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeftIcon, CurrencyDollarIcon, PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, CurrencyDollarIcon, PlusIcon, PencilIcon, TrashIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
 import ExportButtons from '@/components/ExportButtons';
+import ImportModal, { type ImportField } from '@/components/ImportModal';
+
+/* ── Cobros import (from Cobros.csv sheet) ── */
+const COBROS_FIELDS: ImportField[] = [
+  { key: 'id_venta',     label: 'ID_Venta',     required: true },
+  { key: 'id_producto',  label: 'ID_Producto' },
+  { key: 'canal_cobro',  label: 'CANAL' },
+  { key: 'fecha_pago',   label: 'Fecha de pago' },
+  { key: 'metodo_pago',  label: 'Método de pago' },
+  { key: 'monto_pagado', label: 'Monto Pagado',  required: true },
+  { key: 'evidencia',    label: 'Evidencia' },
+  { key: 'notas',        label: 'NOTAS' },
+];
+
+const COBROS_COLUMN_MAP: Record<string, string> = {
+  'id_venta': 'id_venta', 'idventa': 'id_venta',
+  'id_producto': 'id_producto', 'idproducto': 'id_producto',
+  'canal': 'canal_cobro', 'canal_cobro': 'canal_cobro', 'canalcobro': 'canal_cobro',
+  'fecha_pago': 'fecha_pago', 'fechadepago': 'fecha_pago', 'fechapago': 'fecha_pago',
+  'metodo_pago': 'metodo_pago', 'metodopago': 'metodo_pago', 'metododepago': 'metodo_pago',
+  'monto_pagado': 'monto_pagado', 'montopagado': 'monto_pagado', 'monto': 'monto_pagado',
+  'evidencia': 'evidencia',
+  'notas': 'notas', 'nota': 'notas',
+};
+
+/* ── Pedidos import (from Ventas.csv sheet) ── */
+const PEDIDOS_FIELDS: ImportField[] = [
+  { key: 'id_pedido',   label: 'ID_Pedido',   required: true },
+  { key: 'id_venta',    label: 'ID_Venta' },
+  { key: 'id_compra',   label: 'ID_Compra' },
+  { key: 'id_producto', label: 'ID_Producto' },
+  { key: 'id_cliente',  label: 'ID_Cliente' },
+  { key: 'fecha_pedido', label: 'Fecha_Pedido' },
+  { key: 'canal_venta', label: 'Canal_Venta / Logistica' },
+  { key: 'subtotal',    label: 'Subtotal' },
+  { key: 'notas',       label: 'Notas' },
+];
+
+const PEDIDOS_COLUMN_MAP: Record<string, string> = {
+  'id_pedido': 'id_pedido', 'idpedido': 'id_pedido',
+  'id_venta': 'id_venta', 'idventa': 'id_venta',
+  'id_compra': 'id_compra', 'idcompra': 'id_compra',
+  'id_producto': 'id_producto', 'idproducto': 'id_producto',
+  'id_cliente': 'id_cliente', 'idcliente': 'id_cliente',
+  'id_logistica': 'id_logistica', 'idlogistica': 'id_logistica',
+  'fecha_pedido': 'fecha_pedido', 'fechapedido': 'fecha_pedido',
+  'canal_venta': 'canal_venta', 'canalventa': 'canal_venta',
+  'logistica': 'canal_venta',
+  'subtotal': 'subtotal', 'total_pedido': 'subtotal', 'totalpedido': 'subtotal',
+  'evidencia': 'evidencia',
+  'notas': 'notas', 'nota': 'notas',
+};
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useEmpresaOptional } from '@/lib/empresaContext';
@@ -39,6 +91,8 @@ export default function VentasPage() {
     notas: '',
   });
   const [saving, setSaving] = useState(false);
+  const [showImportCobros, setShowImportCobros] = useState(false);
+  const [showImportPedidos, setShowImportPedidos] = useState(false);
 
   const empresa = useEmpresaOptional()?.empresa;
 
@@ -178,6 +232,12 @@ export default function VentasPage() {
               }))}
               filenameBase="ventas-cobros"
             />
+            <button onClick={() => setShowImportCobros(true)} className="btn-secondary flex items-center gap-2">
+              <ArrowUpTrayIcon className="w-5 h-5" /> Importar Cobros
+            </button>
+            <button onClick={() => setShowImportPedidos(true)} className="btn-secondary flex items-center gap-2">
+              <ArrowUpTrayIcon className="w-5 h-5" /> Importar Pedidos
+            </button>
             <button onClick={openNew} className="btn-primary flex items-center gap-2">
               <PlusIcon className="w-5 h-5" /> Nueva venta / cobro
             </button>
@@ -237,6 +297,28 @@ export default function VentasPage() {
           </div>
         )}
       </div>
+
+      {showImportCobros && (
+        <ImportModal
+          title="Cobros (Ventas)"
+          fields={COBROS_FIELDS}
+          columnMap={COBROS_COLUMN_MAP}
+          apiEndpoint="/api/import/cobros"
+          onClose={() => setShowImportCobros(false)}
+          onSuccess={(n) => { setShowImportCobros(false); fetchCobros(); alert(`✅ ${n} cobros importados`); }}
+        />
+      )}
+
+      {showImportPedidos && (
+        <ImportModal
+          title="Pedidos (hoja Ventas)"
+          fields={PEDIDOS_FIELDS}
+          columnMap={PEDIDOS_COLUMN_MAP}
+          apiEndpoint="/api/import/pedidos"
+          onClose={() => setShowImportPedidos(false)}
+          onSuccess={(n) => { setShowImportPedidos(false); alert(`✅ ${n} pedidos importados`); }}
+        />
+      )}
 
       {modal !== 'cerrado' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => !saving && setModal('cerrado')}>

@@ -2,7 +2,40 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeftIcon, MapPinIcon, PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, MapPinIcon, PlusIcon, PencilIcon, TrashIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
+import ImportModal, { type ImportField } from '@/components/ImportModal';
+
+const ENVIOS_FIELDS: ImportField[] = [
+  { key: 'id_envio',            label: 'ID_Envio',            required: true },
+  { key: 'producto',            label: 'Producto' },
+  { key: 'id_cliente',          label: 'ID_Cliente' },
+  { key: 'id_compra',           label: 'ID_Compra' },
+  { key: 'tipo_envio',          label: 'Tipo_Envio' },
+  { key: 'fecha_envio',         label: 'Fecha_Envio' },
+  { key: 'proveedor_logistico', label: 'Proveedor_Logistico' },
+  { key: 'guia_rastreo',        label: 'Guía_Rastreo' },
+  { key: 'costo_envio',         label: 'Costo_Envio' },
+  { key: 'origen',              label: 'Origen' },
+  { key: 'destino',             label: 'Destino' },
+  { key: 'estado_envio',        label: 'Estado_Envio' },
+  { key: 'fecha_entrega',       label: 'Fecha_Entrega' },
+];
+
+const ENVIOS_COLUMN_MAP: Record<string, string> = {
+  'id_envio': 'id_envio', 'idenvio': 'id_envio',
+  'producto': 'producto',
+  'id_cliente': 'id_cliente', 'idcliente': 'id_cliente',
+  'id_compra': 'id_compra', 'idcompra': 'id_compra',
+  'tipo_envio': 'tipo_envio', 'tipoenvio': 'tipo_envio',
+  'fecha_envio': 'fecha_envio', 'fechaenvio': 'fecha_envio',
+  'proveedor_logistico': 'proveedor_logistico', 'proveedorlogistico': 'proveedor_logistico',
+  'guia_rastreo': 'guia_rastreo', 'guiarastreo': 'guia_rastreo', 'guia': 'guia_rastreo',
+  'costo_envio': 'costo_envio', 'costoenvio': 'costo_envio',
+  'origen': 'origen',
+  'destino': 'destino',
+  'estado_envio': 'estado_envio', 'estadoenvio': 'estado_envio',
+  'fecha_entrega': 'fecha_entrega', 'fechaentrega': 'fecha_entrega',
+};
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useCurrency } from '@/lib/currencyContext';
@@ -51,6 +84,7 @@ export default function ContenedoresPage() {
   const [editing, setEditing] = useState<Envio | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   const fetchEnvios = useCallback(() => {
     setLoading(true);
@@ -149,9 +183,14 @@ export default function ContenedoresPage() {
               <p className="text-slate-400">Gestiona envíos, guías de rastreo y logística.</p>
             </div>
           </div>
-          <button onClick={openNew} className="btn-primary flex items-center gap-2">
-            <PlusIcon className="w-5 h-5" /> Nuevo envío
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => setShowImport(true)} className="btn-secondary flex items-center gap-2">
+              <ArrowUpTrayIcon className="w-5 h-5" /> Importar CSV / XLSX
+            </button>
+            <button onClick={openNew} className="btn-primary flex items-center gap-2">
+              <PlusIcon className="w-5 h-5" /> Nuevo envío
+            </button>
+          </div>
         </div>
 
         {loading && <div className="text-center text-slate-500 py-12">Cargando...</div>}
@@ -202,6 +241,17 @@ export default function ContenedoresPage() {
           </div>
         )}
       </div>
+
+      {showImport && (
+        <ImportModal
+          title="Envíos / Logística"
+          fields={ENVIOS_FIELDS}
+          columnMap={ENVIOS_COLUMN_MAP}
+          apiEndpoint="/api/import/envios"
+          onClose={() => setShowImport(false)}
+          onSuccess={(n) => { setShowImport(false); fetchEnvios(); alert(`✅ ${n} envíos importados`); }}
+        />
+      )}
 
       {modal !== 'cerrado' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => !saving && setModal('cerrado')}>

@@ -2,7 +2,30 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeftIcon, BuildingStorefrontIcon, PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, BuildingStorefrontIcon, PlusIcon, PencilIcon, TrashIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
+import ImportModal, { type ImportField } from '@/components/ImportModal';
+
+const PROVEEDORES_FIELDS: ImportField[] = [
+  { key: 'id_proveedor',     label: 'ID_Proveedor',     required: true },
+  { key: 'nombre_proveedor', label: 'Nombre_Proveedor', required: true },
+  { key: 'contacto',         label: 'Contacto' },
+  { key: 'telefono',         label: 'Teléfono' },
+  { key: 'email',            label: 'Email' },
+  { key: 'condiciones_pago', label: 'Condiciones_Pago' },
+  { key: 'tipo_producto',    label: 'Tipo de producto' },
+  { key: 'canal',            label: 'Canal' },
+];
+
+const PROVEEDORES_COLUMN_MAP: Record<string, string> = {
+  'id_proveedor': 'id_proveedor', 'idproveedor': 'id_proveedor',
+  'nombre_proveedor': 'nombre_proveedor', 'nombreproveedor': 'nombre_proveedor', 'nombre': 'nombre_proveedor',
+  'contacto': 'contacto',
+  'telefono': 'telefono', 'telofono': 'telefono',
+  'email': 'email', 'correo': 'email',
+  'condiciones_pago': 'condiciones_pago', 'condicionespago': 'condiciones_pago',
+  'tipo_producto': 'tipo_producto', 'tipoproducto': 'tipo_producto', 'tipodeproducto': 'tipo_producto',
+  'canal': 'canal',
+};
 
 type Proveedor = {
   id: string;
@@ -36,6 +59,7 @@ export default function ProveedoresPage() {
     canal: '',
   });
   const [saving, setSaving] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   const fetchProveedores = useCallback(() => {
     setLoading(true);
@@ -127,9 +151,14 @@ export default function ProveedoresPage() {
               <p className="text-slate-400">Catálogo de proveedores. Alta, edición y eliminación.</p>
             </div>
           </div>
-          <button onClick={openNew} className="btn-primary flex items-center gap-2">
-            <PlusIcon className="w-5 h-5" /> Nuevo proveedor
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => setShowImport(true)} className="btn-secondary flex items-center gap-2">
+              <ArrowUpTrayIcon className="w-5 h-5" /> Importar CSV / XLSX
+            </button>
+            <button onClick={openNew} className="btn-primary flex items-center gap-2">
+              <PlusIcon className="w-5 h-5" /> Nuevo proveedor
+            </button>
+          </div>
         </div>
 
         {loading && <div className="text-center text-slate-500 py-12">Cargando...</div>}
@@ -172,6 +201,17 @@ export default function ProveedoresPage() {
           </div>
         )}
       </div>
+
+      {showImport && (
+        <ImportModal
+          title="Proveedores"
+          fields={PROVEEDORES_FIELDS}
+          columnMap={PROVEEDORES_COLUMN_MAP}
+          apiEndpoint="/api/import/proveedores"
+          onClose={() => setShowImport(false)}
+          onSuccess={(n) => { setShowImport(false); fetchProveedores(); alert(`✅ ${n} proveedores importados`); }}
+        />
+      )}
 
       {modal !== 'cerrado' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => !saving && setModal('cerrado')}>

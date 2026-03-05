@@ -2,8 +2,43 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeftIcon, ShoppingCartIcon, PlusIcon, PencilIcon, TrashIcon, TruckIcon, BanknotesIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, ShoppingCartIcon, PlusIcon, PencilIcon, TrashIcon, TruckIcon, BanknotesIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
 import ExportButtons from '@/components/ExportButtons';
+import ImportModal, { type ImportField } from '@/components/ImportModal';
+
+const COMPRAS_FIELDS: ImportField[] = [
+  { key: 'id_compra',         label: 'ID_Compra',         required: true },
+  { key: 'id_producto',       label: 'ID_Producto' },
+  { key: 'movimiento',        label: 'Movimineto / Descripción' },
+  { key: 'fecha_compra',      label: 'Fecha_Compra' },
+  { key: 'id_proveedor',      label: 'ID_Proveedor' },
+  { key: 'tipo_compra',       label: 'Tipo_Compra' },
+  { key: 'cantidad_comprada', label: 'Cantidad_Comprada' },
+  { key: 'costo_unitario',    label: 'Costo_Unitario' },
+  { key: 'subtotal',          label: 'Subtotal' },
+  { key: 'moneda',            label: 'Moneda' },
+  { key: 'fecha_vencimiento', label: 'Fecha_Vencimiento' },
+  { key: 'estado_pago',       label: 'Estado_Pago' },
+  { key: 'observaciones',     label: 'Observaciones' },
+];
+
+const COMPRAS_COLUMN_MAP: Record<string, string> = {
+  'id_compra': 'id_compra', 'idcompra': 'id_compra',
+  'id_producto': 'id_producto', 'idproducto': 'id_producto',
+  'movimineto': 'movimiento', 'movimiento': 'movimiento', 'descripcion': 'movimiento',
+  'fecha_compra': 'fecha_compra', 'fechacompra': 'fecha_compra',
+  'id_proveedor': 'id_proveedor', 'idproveedor': 'id_proveedor',
+  'tipo_compra': 'tipo_compra', 'tipocompra': 'tipo_compra',
+  'cantidad_comprada': 'cantidad_comprada', 'cantidadcomprada': 'cantidad_comprada',
+  'cantidad_compra': 'cantidad_comprada', 'cantidadcompra': 'cantidad_comprada',
+  'costo_unitario': 'costo_unitario', 'costounitario': 'costo_unitario',
+  'subtotal': 'subtotal',
+  'moneda': 'moneda',
+  'fecha_vencimiento': 'fecha_vencimiento', 'fechavencimiento': 'fecha_vencimiento',
+  'estado_pago': 'estado_pago', 'estadopago': 'estado_pago',
+  'observaciones': 'observaciones',
+  'observacionesdepagomercancia': 'observaciones',
+};
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useCurrency } from '@/lib/currencyContext';
@@ -66,6 +101,7 @@ export default function ComprasPage() {
   const [pagoModal, setPagoModal] = useState<Compra | null>(null);
   const [pagoForm, setPagoForm] = useState({ monto_pago: '', fecha_pago: new Date().toISOString().slice(0, 10), metodo_pago: 'transferencia', referencia: '' });
   const [savingPago, setSavingPago] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   const fetchCompras = useCallback(() => {
     setLoading(true);
@@ -261,6 +297,9 @@ export default function ComprasPage() {
               }))}
               filenameBase="compras"
             />
+            <button onClick={() => setShowImport(true)} className="btn-secondary flex items-center gap-2">
+              <ArrowUpTrayIcon className="w-5 h-5" /> Importar CSV / XLSX
+            </button>
             <button onClick={openNew} className="btn-primary flex items-center gap-2">
               <PlusIcon className="w-5 h-5" /> Nueva compra
             </button>
@@ -353,6 +392,17 @@ export default function ComprasPage() {
           )}
         </section>
       </div>
+
+      {showImport && (
+        <ImportModal
+          title="Compras"
+          fields={COMPRAS_FIELDS}
+          columnMap={COMPRAS_COLUMN_MAP}
+          apiEndpoint="/api/import/compras"
+          onClose={() => setShowImport(false)}
+          onSuccess={(n) => { setShowImport(false); fetchCompras(); alert(`✅ ${n} compras importadas`); }}
+        />
+      )}
 
       {pagoModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => !savingPago && setPagoModal(null)}>
