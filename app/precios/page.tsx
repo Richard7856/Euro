@@ -388,7 +388,7 @@ export default function PreciosProveedorPage() {
                     contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
                     labelStyle={{ color: '#94a3b8', fontSize: 12 }}
                     itemStyle={{ fontSize: 12 }}
-                    formatter={(value: number) => [`$${Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, '']}
+                    formatter={(value: number | undefined) => [`$${Number(value ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`, '']}
                     labelFormatter={(label) => {
                       try { return new Date(label + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' }); } catch { return label; }
                     }}

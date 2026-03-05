@@ -25,14 +25,22 @@ import { parseISO, isWithinInterval } from 'date-fns';
 import { parseDateForFilter } from '@/lib/dateUtils';
 import { useEmpresaOptional } from '@/lib/empresaContext';
 
-function mapApiResponse(json: Record<string, unknown[]>): DatosApi {
-  const ventas = (json.ventas ?? []).map((v: Record<string, unknown>) => ({
+function mapApiResponse(json: Record<string, unknown>): DatosApi {
+  // Helper: cast any key to a typed array (default element type: Record<string, unknown>)
+  const rows = <T = Record<string, unknown>>(key: string): T[] =>
+    ((json[key] as T[] | undefined) ?? []);
+
+  const ventas = rows('ventas').map((v) => ({
     id_venta: String(v.id_venta ?? ''),
+    id_producto: String(v.id_producto ?? ''),
+    canal_cobro: (String(v.canal_cobro ?? 'DANTE').toUpperCase().replace(/\s/g, '') as 'DANTE' | 'EFECTIVO' | 'TRANSFERENCIA'),
     fecha_pago: String(v.fecha_pago ?? ''),
+    metodo_pago: (String(v.metodo_pago ?? '').toUpperCase().includes('EFECTIVO') ? 'EFECTIVO' : 'TRANSFERENCIA') as 'EFECTIVO' | 'TRANSFERENCIA',
     monto_pagado: Number(v.monto_pagado ?? 0),
-    id_producto: v.id_producto ? String(v.id_producto) : undefined,
+    evidencia: v.evidencia ? String(v.evidencia) : undefined,
+    notas: v.notas ? String(v.notas) : undefined,
   }));
-  const compras = (json.compras ?? []).map((c: Record<string, unknown>) => {
+  const compras = rows('compras').map((c) => {
     const inv = Number(c.inversion_mxn ?? c.subtotal ?? 0);
     return {
       id_compra: String(c.id_compra ?? ''),
@@ -44,48 +52,48 @@ function mapApiResponse(json: Record<string, unknown[]>): DatosApi {
       inversion_mxn: inv,
       pagado_mxn: Number(c.pagado_mxn ?? 0),
       pendiente_mxn: Number(c.pendiente_mxn ?? 0),
-      estado: (c.estado as string) || 'Pendiente',
+      estado: (String(c.estado ?? 'PENDIENTE').toUpperCase() as import('@/types/financial').EstadoCompra),
       nota_clave: c.nota_clave ? String(c.nota_clave) : undefined,
       fecha_vencimiento: c.fecha_vencimiento ? String(c.fecha_vencimiento).slice(0, 10) : undefined,
       id_producto: c.id_producto ? String(c.id_producto) : undefined,
       tipo_cambio_usd: c.tipo_cambio_usd != null ? Number(c.tipo_cambio_usd) : undefined,
     };
   });
-  const gastos = (json.gastos ?? []).map((g: Record<string, unknown>) => ({
-    id: String((g as { id?: string }).id ?? ''),
+  const gastos = rows('gastos').map((g) => ({
+    id: String(g.id ?? ''),
     fecha: String(g.fecha ?? '').slice(0, 10),
-    categoria: String(g.categoria ?? 'operativo'),
+    categoria: String(g.categoria ?? 'operativo') as import('@/types/financial').CategoriaGasto,
     monto: Number(g.monto ?? 0),
-    descripcion: g.descripcion ? String(g.descripcion) : undefined,
+    descripcion: String(g.descripcion ?? ''),
     tipo_cambio_usd: g.tipo_cambio_usd != null ? Number(g.tipo_cambio_usd) : undefined,
   }));
-  const inventario = (json.inventario ?? []).map((p: Record<string, unknown>) => ({
+  const inventario = rows('inventario').map((p) => ({
     id_producto: String(p.id_producto ?? ''),
     nombre_producto: String(p.nombre_producto ?? ''),
     cantidad_disponible: Number(p.cantidad_disponible ?? 0),
     valor_unitario_promedio: Number(p.valor_unitario_promedio ?? 0),
     valor_total: Number(p.valor_total ?? 0),
   }));
-  const cuentasPorCobrar = (json.cuentasPorCobrar ?? []).map((c: Record<string, unknown>) => ({
+  const cuentasPorCobrar = rows('cuentasPorCobrar').map((c) => ({
     id_cliente: String(c.id_cliente ?? c.nombre_cliente ?? ''),
     monto_total: Number(c.monto_total ?? 0),
     monto_cobrado: Number(c.monto_cobrado ?? 0),
     monto_pendiente: Number(c.monto_pendiente ?? 0),
   }));
-  const pedidos = (json.pedidos ?? []).map((p: Record<string, unknown>) => ({
+  const pedidos = rows('pedidos').map((p) => ({
     id_pedido: String(p.id_pedido ?? ''),
     id_venta: String(p.id_venta ?? ''),
     id_cliente: String(p.id_cliente ?? ''),
     fecha_pedido: String(p.fecha_pedido ?? '').slice(0, 10),
     total_pedido: Number(p.total_pedido ?? 0),
   }));
-  const envios = (json.envios ?? []).map((e: Record<string, unknown>) => ({
+  const envios = rows('envios').map((e) => ({
     id_envio: String(e.id_envio ?? ''),
     producto: String(e.producto ?? ''),
     id_cliente: String(e.id_cliente ?? ''),
     id_compra: String(e.id_compra ?? ''),
   }));
-  const pagos = (json.pagos ?? []).map((p: Record<string, unknown>, i: number) => ({
+  const pagos = rows('pagos').map((p, i) => ({
     id_pago: String(p.id_pago ?? `pago-${i}`),
     id_compra: String(p.id_compra ?? ''),
     fecha_pago: String(p.fecha_pago ?? '').slice(0, 10),
