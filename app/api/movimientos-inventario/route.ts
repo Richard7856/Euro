@@ -56,9 +56,11 @@ export async function POST(req: Request) {
     const body = await req.json();
     const {
       bodega_id,
+      bodega_destino,
       id_producto,
       tipo,
       cantidad,
+      valor_unitario,
       unidad,
       referencia_tipo,
       referencia_id,
@@ -70,6 +72,12 @@ export async function POST(req: Request) {
         { error: 'Faltan bodega_id, id_producto, tipo o cantidad' },
         { status: 400 }
       );
+    }
+    if (tipo === 'traslado' && !bodega_destino) {
+      return NextResponse.json({ error: 'Se requiere bodega_destino para traslados' }, { status: 400 });
+    }
+    if (tipo === 'traslado' && bodega_destino === bodega_id) {
+      return NextResponse.json({ error: 'Bodega origen y destino deben ser diferentes' }, { status: 400 });
     }
     const cantidadNum = parseFloat(String(cantidad).replace(/[^0-9.-]/g, '')) || 0;
     if (cantidadNum <= 0) {
@@ -103,10 +111,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: errInsert.message }, { status: 500 });
     }
 
-    const esEntrada = tipo === 'entrada' || tipo === 'ajuste';
+    const esEntrada = tipo === 'entrada';
+    const esAjuste = tipo === 'ajuste';
     const esSalida = tipo === 'salida';
 
-    if (esEntrada) {
+    if (esEntrada || esAjuste) {
       const { data: existente } = await supabase
         .from('inventario_bodega')
         .select('id, cantidad, valor_unitario_promedio')
@@ -116,16 +125,32 @@ export async function POST(req: Request) {
 
       if (existente) {
         const nuevaCantidad = Number(existente.cantidad) + cantidadNum;
+        const updFields: Record<string, unknown> = { cantidad: nuevaCantidad, updated_at: new Date().toISOString() };
+        if (esAjuste && valor_unitario != null) {
+          const vu = parseFloat(String(valor_unitario)) || 0;
+          if (vu > 0) {
+            const vap = (Number(existente.cantidad) * Number(existente.valor_unitario_promedio) + cantidadNum * vu) / nuevaCantidad;
+            updFields.valor_unitario_promedio = Math.round(vap * 100) / 100;
+          }
+        } else if (esEntrada && valor_unitario != null) {
+          const vu = parseFloat(String(valor_unitario)) || 0;
+          if (vu > 0) {
+            const vap = (Number(existente.cantidad) * Number(existente.valor_unitario_promedio) + cantidadNum * vu) / nuevaCantidad;
+            updFields.valor_unitario_promedio = Math.round(vap * 100) / 100;
+          }
+        }
         await supabase
           .from('inventario_bodega')
-          .update({ cantidad: nuevaCantidad, updated_at: new Date().toISOString() })
+          .update(updFields)
           .eq('id', existente.id);
       } else {
+        const vu = valor_unitario != null ? (parseFloat(String(valor_unitario)) || 0) : 0;
         await supabase.from('inventario_bodega').insert({
           bodega_id,
           id_producto: String(id_producto).trim(),
           cantidad: cantidadNum,
-          valor_unitario_promedio: 0,
+          valor_unitario_promedio: vu,
+          ...(empresaId ? { empresa_id: empresaId } : {}),
         });
       }
     } else if (esSalida) {
@@ -154,6 +179,65 @@ export async function POST(req: Request) {
         .from('inventario_bodega')
         .update({ cantidad: nuevaCantidad, updated_at: new Date().toISOString() })
         .eq('id', existente.id);
+    } else if (tipo === 'traslado') {
+      // 1. Check stock in origen
+      const { data: origen, error: errOrigen } = await supabase
+        .from('inventario_bodega')
+        .select('id, cantidad, valor_unitario_promedio')
+        .eq('bodega_id', bodega_id)
+        .eq('id_producto', String(id_producto).trim())
+        .single();
+
+      if (errOrigen || !origen) {
+        return NextResponse.json({ error: 'No hay inventario de este producto en la bodega origen' }, { status: 400 });
+      }
+      const actualOrigen = Number(origen.cantidad);
+      if (actualOrigen < cantidadNum) {
+        return NextResponse.json({ error: `Inventario insuficiente en bodega origen. Disponible: ${actualOrigen}` }, { status: 400 });
+      }
+
+      // 2. Decrease from origen
+      await supabase
+        .from('inventario_bodega')
+        .update({ cantidad: actualOrigen - cantidadNum, updated_at: new Date().toISOString() })
+        .eq('id', origen.id);
+
+      // 3. Increase in destino (upsert)
+      const { data: destino } = await supabase
+        .from('inventario_bodega')
+        .select('id, cantidad')
+        .eq('bodega_id', bodega_destino)
+        .eq('id_producto', String(id_producto).trim())
+        .single();
+
+      if (destino) {
+        await supabase
+          .from('inventario_bodega')
+          .update({ cantidad: Number(destino.cantidad) + cantidadNum, valor_unitario_promedio: origen.valor_unitario_promedio, updated_at: new Date().toISOString() })
+          .eq('id', destino.id);
+      } else {
+        await supabase.from('inventario_bodega').insert({
+          bodega_id: bodega_destino,
+          id_producto: String(id_producto).trim(),
+          cantidad: cantidadNum,
+          valor_unitario_promedio: origen.valor_unitario_promedio,
+          ...(empresaId ? { empresa_id: empresaId } : {}),
+        });
+      }
+
+      // 4. Insert entry movement in destino
+      await supabase.from('movimientos_inventario').insert({
+        bodega_id: bodega_destino,
+        id_producto: String(id_producto).trim(),
+        tipo: 'entrada',
+        cantidad: cantidadNum,
+        unidad: insertMov.unidad,
+        referencia_tipo: 'traslado',
+        referencia_id: String(movimiento.id),
+        observaciones: observaciones ? String(observaciones).trim() : `Traslado desde bodega ${bodega_id}`,
+        usuario_id: user.id,
+        ...(empresaId ? { empresa_id: empresaId } : {}),
+      });
     }
     return NextResponse.json({ ok: true, movimiento });
   } catch (err) {

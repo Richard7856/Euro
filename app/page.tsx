@@ -106,10 +106,12 @@ export default function InicioPage() {
           })),
           inventario: (json.inventario ?? []).map((i: Record<string, unknown>) => ({
             id_producto: String(i.id_producto ?? i.id ?? ''),
-            producto: i.producto ? String(i.producto) : undefined,
-            costo_unitario: Number(i.costo_unitario ?? 0),
+            nombre_producto: String(i.nombre_producto ?? ''),
+            valor_unitario_promedio: Number(i.valor_unitario_promedio ?? 0),
             cantidad_disponible: Number(i.cantidad_disponible ?? 0),
-            valor_total: Number(i.valor_total ?? (Number(i.costo_unitario ?? 0) * Number(i.cantidad_disponible ?? 0))),
+            valor_total: Number(i.valor_total ?? (Number(i.valor_unitario_promedio ?? 0) * Number(i.cantidad_disponible ?? 0))),
+            fecha_ultima_compra: String(i.fecha_ultima_compra ?? ''),
+            rotacion_dias: Number(i.rotacion_dias ?? 0),
           })),
           cuentasPorCobrar: (json.cuentasPorCobrar ?? []).map((c: Record<string, unknown>) => ({
             id_venta: String(c.id_venta ?? c.id ?? ''),

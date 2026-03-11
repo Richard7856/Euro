@@ -8,6 +8,7 @@ import {
   PlusIcon,
   ArrowDownTrayIcon,
   ArrowUpTrayIcon,
+  ArrowsRightLeftIcon,
   CubeIcon,
   PencilIcon,
 } from '@heroicons/react/24/outline';
@@ -59,15 +60,25 @@ export default function BodegasPage() {
   const [modalBodega, setModalBodega] = useState(false);
   const [editingBodega, setEditingBodega] = useState<Bodega | null>(null);
   const [modalMovimiento, setModalMovimiento] = useState(false);
+  const [modalTraslado, setModalTraslado] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formBodega, setFormBodega] = useState({ nombre: '', codigo: '', direccion: '', activo: true });
   const [formMov, setFormMov] = useState({
-    tipo: 'entrada' as 'entrada' | 'salida',
+    tipo: 'entrada' as 'entrada' | 'salida' | 'ajuste',
     id_producto: '',
     cantidad: '',
+    valor_unitario: '',
     unidad: 'kg',
     referencia_tipo: 'manual' as string,
     referencia_id: '',
+    observaciones: '',
+  });
+  const [formTraslado, setFormTraslado] = useState({
+    bodega_origen: '',
+    bodega_destino: '',
+    id_producto: '',
+    cantidad: '',
+    unidad: 'kg',
     observaciones: '',
   });
 
@@ -202,6 +213,7 @@ export default function BodegasPage() {
           id_producto: formMov.id_producto,
           tipo: formMov.tipo,
           cantidad,
+          valor_unitario: formMov.valor_unitario ? parseFloat(formMov.valor_unitario.replace(/[^0-9.-]/g, '')) || null : null,
           unidad: formMov.unidad || 'kg',
           referencia_tipo: formMov.referencia_tipo || 'manual',
           referencia_id: formMov.referencia_id || null,
@@ -215,6 +227,7 @@ export default function BodegasPage() {
         tipo: 'entrada',
         id_producto: '',
         cantidad: '',
+        valor_unitario: '',
         unidad: 'kg',
         referencia_tipo: 'manual',
         referencia_id: '',
@@ -224,6 +237,57 @@ export default function BodegasPage() {
       fetchMovimientos(bodegaSeleccionada);
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Error al registrar movimiento');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const guardarTraslado = async () => {
+    if (!formTraslado.bodega_origen || !formTraslado.bodega_destino) {
+      alert('Selecciona bodega origen y destino');
+      return;
+    }
+    if (formTraslado.bodega_origen === formTraslado.bodega_destino) {
+      alert('Origen y destino deben ser diferentes');
+      return;
+    }
+    if (!formTraslado.id_producto) {
+      alert('Selecciona un producto');
+      return;
+    }
+    const cantidad = parseFloat(formTraslado.cantidad.replace(/[^0-9.-]/g, '')) || 0;
+    if (cantidad <= 0) {
+      alert('La cantidad debe ser mayor a 0');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/movimientos-inventario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bodega_id: formTraslado.bodega_origen,
+          bodega_destino: formTraslado.bodega_destino,
+          id_producto: formTraslado.id_producto,
+          tipo: 'traslado',
+          cantidad,
+          unidad: formTraslado.unidad || 'kg',
+          referencia_tipo: 'traslado',
+          observaciones: formTraslado.observaciones || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setModalTraslado(false);
+      setFormTraslado({ bodega_origen: '', bodega_destino: '', id_producto: '', cantidad: '', unidad: 'kg', observaciones: '' });
+      if (bodegaSeleccionada) {
+        fetchInventario(bodegaSeleccionada);
+        fetchMovimientos(bodegaSeleccionada);
+      } else {
+        fetchMovimientos('');
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Error al registrar traslado');
     } finally {
       setSaving(false);
     }
@@ -276,7 +340,7 @@ export default function BodegasPage() {
               <p className="text-slate-400">Inventario por bodega, entradas y salidas</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button onClick={openNewBodega} className="btn-primary flex items-center gap-2">
               <PlusIcon className="w-5 h-5" /> Nueva bodega
             </button>
@@ -286,6 +350,16 @@ export default function BodegasPage() {
               className="btn-secondary flex items-center gap-2 disabled:opacity-50"
             >
               <ArrowDownTrayIcon className="w-5 h-5" /> Entrada / Salida
+            </button>
+            <button
+              onClick={() => {
+                setFormTraslado((f) => ({ ...f, bodega_origen: bodegaSeleccionada || '' }));
+                setModalTraslado(true);
+              }}
+              disabled={bodegas.length < 2}
+              className="btn-secondary flex items-center gap-2 disabled:opacity-50"
+            >
+              <ArrowsRightLeftIcon className="w-5 h-5" /> Traslado
             </button>
           </div>
         </div>
@@ -494,6 +568,79 @@ export default function BodegasPage() {
         </div>
       )}
 
+      {modalTraslado && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => !saving && setModalTraslado(false)}>
+          <div className="bg-slate-800 rounded-xl border border-slate-700 max-w-md w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-xl font-bold text-slate-100 mb-4">Traslado entre bodegas</h2>
+            <div className="space-y-3">
+              <label className="block text-sm text-slate-400">Bodega origen *</label>
+              <select
+                value={formTraslado.bodega_origen}
+                onChange={(e) => setFormTraslado((f) => ({ ...f, bodega_origen: e.target.value }))}
+                className="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-slate-200"
+              >
+                <option value="">— Seleccionar —</option>
+                {bodegas.filter((b) => b.activo).map((b) => (
+                  <option key={b.id} value={b.id}>{b.codigo ? `${b.codigo} – ${b.nombre}` : b.nombre}</option>
+                ))}
+              </select>
+              <label className="block text-sm text-slate-400">Bodega destino *</label>
+              <select
+                value={formTraslado.bodega_destino}
+                onChange={(e) => setFormTraslado((f) => ({ ...f, bodega_destino: e.target.value }))}
+                className="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-slate-200"
+              >
+                <option value="">— Seleccionar —</option>
+                {bodegas.filter((b) => b.activo && b.id !== formTraslado.bodega_origen).map((b) => (
+                  <option key={b.id} value={b.id}>{b.codigo ? `${b.codigo} – ${b.nombre}` : b.nombre}</option>
+                ))}
+              </select>
+              <label className="block text-sm text-slate-400">Producto *</label>
+              <select
+                value={formTraslado.id_producto}
+                onChange={(e) => setFormTraslado((f) => ({ ...f, id_producto: e.target.value }))}
+                className="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-slate-200"
+              >
+                <option value="">— Seleccionar —</option>
+                {productos.map((p) => (
+                  <option key={p.id_producto} value={p.id_producto}>{p.nombre_producto} ({p.id_producto})</option>
+                ))}
+              </select>
+              <label className="block text-sm text-slate-400">Cantidad *</label>
+              <input
+                type="text"
+                value={formTraslado.cantidad}
+                onChange={(e) => setFormTraslado((f) => ({ ...f, cantidad: e.target.value }))}
+                className="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-slate-200"
+                placeholder="0"
+              />
+              <label className="block text-sm text-slate-400">Unidad</label>
+              <input
+                type="text"
+                value={formTraslado.unidad}
+                onChange={(e) => setFormTraslado((f) => ({ ...f, unidad: e.target.value }))}
+                className="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-slate-200"
+                placeholder="kg"
+              />
+              <label className="block text-sm text-slate-400">Observaciones</label>
+              <input
+                type="text"
+                value={formTraslado.observaciones}
+                onChange={(e) => setFormTraslado((f) => ({ ...f, observaciones: e.target.value }))}
+                className="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-slate-200"
+                placeholder="Opcional"
+              />
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={guardarTraslado} disabled={saving} className="btn-primary flex-1">
+                {saving ? 'Procesando...' : 'Trasladar'}
+              </button>
+              <button onClick={() => !saving && setModalTraslado(false)} className="btn-secondary">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modalMovimiento && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => !saving && setModalMovimiento(false)}>
           <div className="bg-slate-800 rounded-xl border border-slate-700 max-w-md w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -502,11 +649,12 @@ export default function BodegasPage() {
               <label className="block text-sm text-slate-400">Tipo</label>
               <select
                 value={formMov.tipo}
-                onChange={(e) => setFormMov((f) => ({ ...f, tipo: e.target.value as 'entrada' | 'salida' }))}
+                onChange={(e) => setFormMov((f) => ({ ...f, tipo: e.target.value as 'entrada' | 'salida' | 'ajuste' }))}
                 className="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-slate-200"
               >
                 <option value="entrada">Entrada</option>
                 <option value="salida">Salida</option>
+                <option value="ajuste">Ajuste (corrección de stock)</option>
               </select>
               <label className="block text-sm text-slate-400">Producto *</label>
               <select
@@ -529,6 +677,18 @@ export default function BodegasPage() {
                 className="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-slate-200"
                 placeholder="0"
               />
+              {(formMov.tipo === 'entrada' || formMov.tipo === 'ajuste') && (
+                <>
+                  <label className="block text-sm text-slate-400">Valor unitario (opcional, para recalcular costo prom.)</label>
+                  <input
+                    type="text"
+                    value={formMov.valor_unitario}
+                    onChange={(e) => setFormMov((f) => ({ ...f, valor_unitario: e.target.value }))}
+                    className="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-slate-200"
+                    placeholder="Ej. 1500.00"
+                  />
+                </>
+              )}
               <label className="block text-sm text-slate-400">Unidad</label>
               <input
                 type="text"

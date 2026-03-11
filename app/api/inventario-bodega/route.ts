@@ -16,11 +16,20 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const bodegaId = searchParams.get('bodega_id');
+    const empresaId = getEmpresaIdFromRequest(req);
+    const empresaSlug = getEmpresaSlugFromRequest(req);
 
     let query = supabase
       .from('inventario_bodega')
       .select('id, bodega_id, id_producto, cantidad, valor_unitario_promedio, updated_at');
 
+    if (empresaId) {
+      if (empresaSlug === 'euromex') {
+        query = query.or(`empresa_id.eq.${empresaId},empresa_id.is.null`);
+      } else {
+        query = query.eq('empresa_id', empresaId);
+      }
+    }
     if (bodegaId) query = query.eq('bodega_id', bodegaId);
 
     const { data: rows, error } = await query.order('id_producto', { ascending: true });

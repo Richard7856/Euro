@@ -103,6 +103,47 @@ export async function POST(req: Request) {
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // Auto-create inventory entry in default bodega if producto + cantidad present
+    const cantidadCompra = row.cantidad_compra ? Number(row.cantidad_compra) : 0;
+    if (row.id_producto && cantidadCompra > 0) {
+      let bodegaQuery = supabase.from('bodegas').select('id').eq('activo', true);
+      if (empresaId) bodegaQuery = bodegaQuery.eq('empresa_id', empresaId);
+      const { data: bodegas } = await bodegaQuery.order('nombre', { ascending: true }).limit(1);
+      if (bodegas && bodegas.length > 0) {
+        const bodegaId = bodegas[0].id;
+        const vu = row.costo_unitario ? Number(row.costo_unitario) : 0;
+        const { data: existente } = await supabase
+          .from('inventario_bodega')
+          .select('id, cantidad, valor_unitario_promedio')
+          .eq('bodega_id', bodegaId)
+          .eq('id_producto', String(row.id_producto))
+          .single();
+        if (existente) {
+          const nuevaCantidad = Number(existente.cantidad) + cantidadCompra;
+          const updFields: Record<string, unknown> = { cantidad: nuevaCantidad, updated_at: new Date().toISOString() };
+          if (vu > 0) {
+            const vap = (Number(existente.cantidad) * Number(existente.valor_unitario_promedio) + cantidadCompra * vu) / nuevaCantidad;
+            updFields.valor_unitario_promedio = Math.round(vap * 100) / 100;
+          }
+          await supabase.from('inventario_bodega').update(updFields).eq('id', existente.id);
+        } else {
+          await supabase.from('inventario_bodega').insert({
+            bodega_id: bodegaId, id_producto: String(row.id_producto),
+            cantidad: cantidadCompra, valor_unitario_promedio: vu,
+            ...(empresaId ? { empresa_id: empresaId } : {}),
+          });
+        }
+        await supabase.from('movimientos_inventario').insert({
+          bodega_id: bodegaId, id_producto: String(row.id_producto),
+          tipo: 'entrada', cantidad: cantidadCompra, unidad: 'kg',
+          referencia_tipo: 'compra', referencia_id: String(row.id_compra),
+          observaciones: `Entrada automática por compra ${row.id_compra}`,
+          usuario_id: user.id, ...(empresaId ? { empresa_id: empresaId } : {}),
+        });
+      }
+    }
+
     return NextResponse.json({ ok: true, compra: { ...row, pagado_mxn: 0, pendiente_mxn: sub ?? 0 } });
   } catch (err) {
     console.error('API compras POST:', err);

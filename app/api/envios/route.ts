@@ -73,11 +73,14 @@ export async function PATCH(req: Request) {
     const body = await req.json();
     const str = (v: unknown) => (v != null && String(v).trim() !== '' ? String(v).trim() : null);
     const updates: Record<string, unknown> = {};
-    const strFields = ['producto', 'id_cliente', 'id_compra', 'tipo_envio', 'proveedor_logistico', 'guia_rastreo', 'origen', 'destino', 'estado_envio'];
+    const strFields = ['producto', 'id_cliente', 'id_compra', 'tipo_envio', 'proveedor_logistico', 'guia_rastreo', 'origen', 'destino', 'estado_envio', 'carrier'];
     for (const f of strFields) { if (body[f] !== undefined) updates[f] = str(body[f]); }
     if (body.fecha_envio !== undefined) updates.fecha_envio = body.fecha_envio ? String(body.fecha_envio).slice(0, 10) : null;
     if (body.fecha_entrega !== undefined) updates.fecha_entrega = body.fecha_entrega ? String(body.fecha_entrega).slice(0, 10) : null;
     if (body.costo_envio !== undefined) updates.costo_envio = body.costo_envio != null ? parseFloat(String(body.costo_envio)) : null;
+    if (body.lat_actual !== undefined) updates.lat_actual = body.lat_actual != null ? parseFloat(String(body.lat_actual)) : null;
+    if (body.lng_actual !== undefined) updates.lng_actual = body.lng_actual != null ? parseFloat(String(body.lng_actual)) : null;
+    if (body.temperatura_actual !== undefined) updates.temperatura_actual = body.temperatura_actual != null ? parseFloat(String(body.temperatura_actual)) : null;
 
     const { data: row, error } = await supabase.from('envios').update(updates).eq('id_envio', id).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

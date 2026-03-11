@@ -1,9 +1,21 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { ArrowLeftIcon, MapPinIcon, PlusIcon, PencilIcon, TrashIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
+import {
+  ArrowLeftIcon, MapPinIcon, PlusIcon, PencilIcon, TrashIcon,
+  ArrowUpTrayIcon, SignalIcon,
+} from '@heroicons/react/24/outline';
 import ImportModal, { type ImportField } from '@/components/ImportModal';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { useCurrency } from '@/lib/currencyContext';
+import { useEmpresaOptional } from '@/lib/empresaContext';
+import type { EnvioMapPoint } from '@/components/EnviosMap';
+
+// Leaflet must be loaded client-side only (no SSR)
+const EnviosMap = dynamic(() => import('@/components/EnviosMap'), { ssr: false });
 
 const ENVIOS_FIELDS: ImportField[] = [
   { key: 'id_envio',            label: 'ID_Envio',            required: true },
@@ -36,10 +48,6 @@ const ENVIOS_COLUMN_MAP: Record<string, string> = {
   'estado_envio': 'estado_envio', 'estadoenvio': 'estado_envio',
   'fecha_entrega': 'fecha_entrega', 'fechaentrega': 'fecha_entrega',
 };
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { useCurrency } from '@/lib/currencyContext';
-import { useEmpresaOptional } from '@/lib/empresaContext';
 
 type Envio = {
   id_envio: string;
@@ -55,8 +63,14 @@ type Envio = {
   destino: string | null;
   estado_envio: string | null;
   fecha_entrega: string | null;
+  carrier?: string | null;
+  lat_actual?: number | null;
+  lng_actual?: number | null;
+  temperatura_actual?: number | null;
+  ultima_actualizacion?: string | null;
 };
 
+const CARRIERS = ['auto', 'estafeta', 'dhl', 'fedex', 'manual'];
 const ESTADOS = ['Pendiente', 'En tránsito', 'Entregado', 'Cancelado'];
 
 const estadoColor: Record<string, string> = {
@@ -72,6 +86,7 @@ const emptyForm = {
   id_envio: '', producto: '', id_cliente: '', id_compra: '', tipo_envio: 'Compra',
   fecha_envio: new Date().toISOString().slice(0, 10), proveedor_logistico: '', guia_rastreo: '',
   costo_envio: '', origen: '', destino: '', estado_envio: 'Pendiente', fecha_entrega: '',
+  carrier: 'auto', lat_actual: '', lng_actual: '', temperatura_actual: '',
 };
 
 export default function ContenedoresPage() {
@@ -85,6 +100,9 @@ export default function ContenedoresPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [trackingId, setTrackingId] = useState<string | null>(null);
+  const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(false);
 
   const fetchEnvios = useCallback(() => {
     setLoading(true);
@@ -98,28 +116,49 @@ export default function ContenedoresPage() {
 
   useEffect(() => { fetchEnvios(); }, [fetchEnvios]);
 
-  const openNew = () => {
-    setEditing(null);
-    setForm(emptyForm);
-    setModal('nuevo');
+  // Auto-refresh tracking every 30 minutes
+  useEffect(() => {
+    if (autoRefresh) {
+      autoRefreshRef.current = setInterval(fetchEnvios, 30 * 60 * 1000);
+    } else {
+      if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
+    }
+    return () => { if (autoRefreshRef.current) clearInterval(autoRefreshRef.current); };
+  }, [autoRefresh, fetchEnvios]);
+
+  const rastrear = async (envio: Envio) => {
+    if (!envio.guia_rastreo) { alert('El envío no tiene número de guía'); return; }
+    setTrackingId(envio.id_envio);
+    try {
+      const res = await fetch(`/api/envios/${encodeURIComponent(envio.id_envio)}/track`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ carrier: envio.carrier && envio.carrier !== 'auto' ? envio.carrier : undefined }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string; tracking?: { status: string } };
+      if (!res.ok) throw new Error(data.error ?? 'Error al rastrear');
+      fetchEnvios();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Error al rastrear');
+    } finally {
+      setTrackingId(null);
+    }
   };
 
+  const openNew = () => { setEditing(null); setForm(emptyForm); setModal('nuevo'); };
   const openEdit = (e: Envio) => {
     setEditing(e);
     setForm({
-      id_envio: e.id_envio,
-      producto: e.producto ?? '',
-      id_cliente: e.id_cliente ?? '',
-      id_compra: e.id_compra ?? '',
-      tipo_envio: e.tipo_envio ?? 'Compra',
-      fecha_envio: e.fecha_envio?.slice(0, 10) ?? '',
-      proveedor_logistico: e.proveedor_logistico ?? '',
-      guia_rastreo: e.guia_rastreo ?? '',
-      costo_envio: String(e.costo_envio ?? ''),
-      origen: e.origen ?? '',
-      destino: e.destino ?? '',
-      estado_envio: e.estado_envio ?? 'Pendiente',
-      fecha_entrega: e.fecha_entrega?.slice(0, 10) ?? '',
+      id_envio: e.id_envio, producto: e.producto ?? '', id_cliente: e.id_cliente ?? '',
+      id_compra: e.id_compra ?? '', tipo_envio: e.tipo_envio ?? 'Compra',
+      fecha_envio: e.fecha_envio?.slice(0, 10) ?? '', proveedor_logistico: e.proveedor_logistico ?? '',
+      guia_rastreo: e.guia_rastreo ?? '', costo_envio: String(e.costo_envio ?? ''),
+      origen: e.origen ?? '', destino: e.destino ?? '', estado_envio: e.estado_envio ?? 'Pendiente',
+      fecha_entrega: e.fecha_entrega?.slice(0, 10) ?? '', carrier: e.carrier ?? 'auto',
+      lat_actual: e.lat_actual != null ? String(e.lat_actual) : '',
+      lng_actual: e.lng_actual != null ? String(e.lng_actual) : '',
+      temperatura_actual: e.temperatura_actual != null ? String(e.temperatura_actual) : '',
     });
     setModal('editar');
   };
@@ -130,11 +169,15 @@ export default function ContenedoresPage() {
     if (!form.id_envio) { alert('Completa ID envío'); return; }
     setSaving(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         ...form,
         costo_envio: form.costo_envio ? parseFloat(form.costo_envio) : null,
         fecha_envio: form.fecha_envio || null,
         fecha_entrega: form.fecha_entrega || null,
+        carrier: form.carrier && form.carrier !== 'auto' ? form.carrier : null,
+        lat_actual: form.lat_actual ? parseFloat(form.lat_actual) : null,
+        lng_actual: form.lng_actual ? parseFloat(form.lng_actual) : null,
+        temperatura_actual: form.temperatura_actual ? parseFloat(form.temperatura_actual) : null,
       };
       let res: Response;
       if (modal === 'editar' && editing) {
@@ -167,6 +210,12 @@ export default function ContenedoresPage() {
     }
   };
 
+  const mapPoints: EnvioMapPoint[] = envios.map((e) => ({
+    id_envio: e.id_envio, producto: e.producto, guia_rastreo: e.guia_rastreo,
+    estado_envio: e.estado_envio, lat_actual: e.lat_actual, lng_actual: e.lng_actual,
+    temperatura_actual: e.temperatura_actual, ultima_actualizacion: e.ultima_actualizacion,
+  }));
+
   return (
     <main className="min-h-screen page-bg text-slate-50 p-4 md:p-8">
       <div className="max-w-[1400px] mx-auto space-y-8">
@@ -183,7 +232,16 @@ export default function ContenedoresPage() {
               <p className="text-slate-400">Gestiona envíos, guías de rastreo y logística.</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoRefresh}
+                onChange={(e) => setAutoRefresh(e.target.checked)}
+                className="w-4 h-4 rounded"
+              />
+              Auto-actualizar (30 min)
+            </label>
             <button onClick={() => setShowImport(true)} className="btn-secondary flex items-center gap-2">
               <ArrowUpTrayIcon className="w-5 h-5" /> Importar CSV / XLSX
             </button>
@@ -192,6 +250,18 @@ export default function ContenedoresPage() {
             </button>
           </div>
         </div>
+
+        {/* GPS Map */}
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <SignalIcon className="w-5 h-5 text-sky-400" />
+            <h2 className="text-lg font-semibold text-slate-200">Mapa GPS</h2>
+            <span className="text-xs text-slate-500">
+              {mapPoints.filter((p) => p.lat_actual != null).length} envío(s) con posición
+            </span>
+          </div>
+          <EnviosMap envios={mapPoints} height={480} />
+        </section>
 
         {loading && <div className="text-center text-slate-500 py-12">Cargando...</div>}
         {error && <div className="rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 p-4">{error}</div>}
@@ -206,10 +276,11 @@ export default function ContenedoresPage() {
                     <th className="py-3 px-4 font-medium">Producto</th>
                     <th className="py-3 px-4 font-medium">Fecha</th>
                     <th className="py-3 px-4 font-medium">Origen → Destino</th>
-                    <th className="py-3 px-4 font-medium">Guía</th>
+                    <th className="py-3 px-4 font-medium">Guía / Carrier</th>
                     <th className="py-3 px-4 font-medium text-right">Costo</th>
                     <th className="py-3 px-4 font-medium">Estado</th>
-                    <th className="py-3 px-4 w-24">Acciones</th>
+                    <th className="py-3 px-4 font-medium">GPS / Temp.</th>
+                    <th className="py-3 px-4 w-32">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
@@ -217,18 +288,48 @@ export default function ContenedoresPage() {
                     <tr key={e.id_envio} className="hover:bg-slate-800/30">
                       <td className="py-3 px-4 font-mono text-sky-400 text-xs">{e.id_envio}</td>
                       <td className="py-3 px-4 text-slate-200">{e.producto ?? '—'}</td>
-                      <td className="py-3 px-4 text-slate-400 text-xs">{e.fecha_envio ? format(new Date(e.fecha_envio + 'T12:00:00'), 'd MMM yyyy', { locale: es }) : '—'}</td>
+                      <td className="py-3 px-4 text-slate-400 text-xs">
+                        {e.fecha_envio ? format(new Date(e.fecha_envio + 'T12:00:00'), 'd MMM yyyy', { locale: es }) : '—'}
+                      </td>
                       <td className="py-3 px-4 text-slate-400 text-xs">{e.origen ?? '—'} → {e.destino ?? '—'}</td>
-                      <td className="py-3 px-4 font-mono text-slate-300 text-xs">{e.guia_rastreo ?? '—'}</td>
+                      <td className="py-3 px-4 text-xs">
+                        <div className="font-mono text-slate-300">{e.guia_rastreo ?? '—'}</div>
+                        {e.carrier && <div className="text-slate-500 capitalize">{e.carrier}</div>}
+                      </td>
                       <td className="py-3 px-4 text-right text-amber-400 font-mono">{formatCurrency(e.costo_envio ?? 0)}</td>
                       <td className="py-3 px-4">
                         <span className={`px-2 py-0.5 rounded text-xs font-medium ${estadoColor[e.estado_envio ?? ''] ?? 'bg-slate-700 text-slate-400'}`}>
                           {e.estado_envio ?? '—'}
                         </span>
                       </td>
-                      <td className="py-3 px-4 flex gap-2">
-                        <button onClick={() => openEdit(e)} className="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white" title="Editar"><PencilIcon className="w-4 h-4" /></button>
-                        <button onClick={() => remove(e.id_envio)} className="p-1.5 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400" title="Eliminar"><TrashIcon className="w-4 h-4" /></button>
+                      <td className="py-3 px-4 text-xs text-slate-400">
+                        {e.lat_actual != null ? (
+                          <div>
+                            <div>{e.lat_actual.toFixed(4)}, {e.lng_actual?.toFixed(4)}</div>
+                            {e.temperatura_actual != null && <div>{e.temperatura_actual}°C</div>}
+                          </div>
+                        ) : '—'}
+                      </td>
+                      <td className="py-3 px-4 flex gap-1">
+                        {e.guia_rastreo && (
+                          <button
+                            onClick={() => rastrear(e)}
+                            disabled={trackingId === e.id_envio}
+                            className="p-1.5 rounded hover:bg-sky-500/20 text-slate-400 hover:text-sky-400 disabled:opacity-50"
+                            title="Rastrear GPS"
+                          >
+                            {trackingId === e.id_envio
+                              ? <span className="animate-spin inline-block w-4 h-4 border-2 border-sky-400 border-t-transparent rounded-full" />
+                              : <SignalIcon className="w-4 h-4" />
+                            }
+                          </button>
+                        )}
+                        <button onClick={() => openEdit(e)} className="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white" title="Editar">
+                          <PencilIcon className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => remove(e.id_envio)} className="p-1.5 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400" title="Eliminar">
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -299,6 +400,18 @@ export default function ContenedoresPage() {
                 <input type="text" value={form.guia_rastreo} onChange={(e) => setF({ ...form, guia_rastreo: e.target.value })} className={inputClass} />
               </div>
               <div>
+                <label className="block text-sm text-slate-400 mb-1">Carrier</label>
+                <select value={form.carrier} onChange={(e) => setF({ ...form, carrier: e.target.value })} className={inputClass}>
+                  {CARRIERS.map((c) => <option key={c} value={c}>{c === 'auto' ? 'Auto-detectar' : c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Estado</label>
+                <select value={form.estado_envio} onChange={(e) => setF({ ...form, estado_envio: e.target.value })} className={inputClass}>
+                  {ESTADOS.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm text-slate-400 mb-1">Origen</label>
                 <input type="text" value={form.origen} onChange={(e) => setF({ ...form, origen: e.target.value })} className={inputClass} />
               </div>
@@ -311,10 +424,16 @@ export default function ContenedoresPage() {
                 <input type="number" min="0" step="0.01" value={form.costo_envio} onChange={(e) => setF({ ...form, costo_envio: e.target.value })} className={inputClass} />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Estado</label>
-                <select value={form.estado_envio} onChange={(e) => setF({ ...form, estado_envio: e.target.value })} className={inputClass}>
-                  {ESTADOS.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
+                <label className="block text-sm text-slate-400 mb-1">Temperatura (°C)</label>
+                <input type="number" step="0.1" value={form.temperatura_actual} onChange={(e) => setF({ ...form, temperatura_actual: e.target.value })} className={inputClass} placeholder="Opcional" />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Latitud (GPS manual)</label>
+                <input type="number" step="0.000001" value={form.lat_actual} onChange={(e) => setF({ ...form, lat_actual: e.target.value })} className={inputClass} placeholder="Ej. 19.4326" />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Longitud (GPS manual)</label>
+                <input type="number" step="0.000001" value={form.lng_actual} onChange={(e) => setF({ ...form, lng_actual: e.target.value })} className={inputClass} placeholder="Ej. -99.1332" />
               </div>
             </div>
             <div className="flex gap-3 mt-6">

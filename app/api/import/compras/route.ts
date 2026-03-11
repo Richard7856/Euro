@@ -91,6 +91,60 @@ export async function POST(req: Request) {
       }
     }
 
+    // Auto-create inventory entries for imported compras with id_producto + cantidad
+    if (imported > 0) {
+      const comprasConProducto = rowsToUpsert.filter(
+        (r) => r.id_producto && r.cantidad_compra && Number(r.cantidad_compra) > 0
+      );
+      if (comprasConProducto.length > 0) {
+        let bodegaQuery = supabase.from('bodegas').select('id').eq('activo', true);
+        if (empresaId) bodegaQuery = bodegaQuery.eq('empresa_id', empresaId);
+        const { data: bodegas } = await bodegaQuery.order('nombre', { ascending: true }).limit(1);
+        if (bodegas && bodegas.length > 0) {
+          const bodegaId = bodegas[0].id;
+          for (const c of comprasConProducto) {
+            const idProducto = String(c.id_producto);
+            const cantidadC = Number(c.cantidad_compra);
+            const vu = c.costo_unitario ? Number(c.costo_unitario) : 0;
+            const { data: existente } = await supabase
+              .from('inventario_bodega')
+              .select('id, cantidad, valor_unitario_promedio')
+              .eq('bodega_id', bodegaId)
+              .eq('id_producto', idProducto)
+              .single();
+            if (existente) {
+              const nuevaCantidad = Number(existente.cantidad) + cantidadC;
+              const updFields: Record<string, unknown> = { cantidad: nuevaCantidad, updated_at: new Date().toISOString() };
+              if (vu > 0) {
+                const vap = (Number(existente.cantidad) * Number(existente.valor_unitario_promedio) + cantidadC * vu) / nuevaCantidad;
+                updFields.valor_unitario_promedio = Math.round(vap * 100) / 100;
+              }
+              await supabase.from('inventario_bodega').update(updFields).eq('id', existente.id);
+            } else {
+              await supabase.from('inventario_bodega').insert({
+                bodega_id: bodegaId, id_producto: idProducto,
+                cantidad: cantidadC, valor_unitario_promedio: vu,
+                ...(empresaId ? { empresa_id: empresaId } : {}),
+              });
+            }
+          }
+          // Bulk insert movimientos
+          const movs = comprasConProducto.map((c) => ({
+            bodega_id: bodegaId,
+            id_producto: String(c.id_producto),
+            tipo: 'entrada',
+            cantidad: Number(c.cantidad_compra),
+            unidad: 'kg',
+            referencia_tipo: 'compra',
+            referencia_id: String(c.id_compra),
+            observaciones: `Importación masiva compra ${c.id_compra}`,
+            ...(empresaId ? { empresa_id: empresaId } : {}),
+          }));
+          await supabase.from('movimientos_inventario').insert(movs);
+        }
+      }
+    }
+
     return NextResponse.json({ ok: true, imported, errors });
   } catch (err) {
     console.error('API import/compras POST:', err);
