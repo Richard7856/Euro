@@ -6,13 +6,11 @@
 
 DO $$
 DECLARE
-  euromex_id uuid;
+  -- ID fijo definido en lib/empresaApi.ts — no viene de tabla empresas
+  euromex_id uuid := 'a0000000-0000-4000-8000-000000000001';
 BEGIN
-  -- Obtener empresa_id de Euromex
-  SELECT id INTO euromex_id FROM empresas WHERE slug = 'euromex' LIMIT 1;
-
-  -- Solo insertar si no hay datos previos para esta empresa
-  IF (SELECT COUNT(*) FROM envios WHERE empresa_id = euromex_id) = 0 THEN
+  -- Solo insertar si los CONT-26XX no existen ya
+  IF (SELECT COUNT(*) FROM envios WHERE id_envio LIKE 'CONT-26%') = 0 THEN
 
     INSERT INTO envios (
       id_envio, producto, id_cliente, id_compra, tipo_envio,
